@@ -10,7 +10,7 @@ MCP (Model Context Protocol) servers continuously occupy agent context. A CLI to
 
 ### Prerequisites
 
-- Node.js >= 22.7.5
+- Python >= 3.10
 - A Tableau Server or Tableau Cloud instance
 - A [Personal Access Token (PAT)](https://help.tableau.com/current/server/en-us/security_personal_access_tokens.htm)
 
@@ -19,9 +19,7 @@ MCP (Model Context Protocol) servers continuously occupy agent context. A CLI to
 ```bash
 git clone <repo-url>
 cd tableau-cli
-npm install
-npm run build
-npm link   # makes `tableau-cli` available globally
+pip install -e .
 ```
 
 ### Configure
@@ -148,14 +146,11 @@ Error types include: `authentication-error`, `feature-disabled`, `tableau-api-er
 ## Development
 
 ```bash
-# Run without building (via tsx)
-npm run dev -- views list
+# Run directly
+python -m tableau_cli.cli views list
 
-# Type-check
-npm run lint
-
-# Build
-npm run build
+# Install in editable mode
+pip install -e .
 ```
 
 ## Acknowledgements

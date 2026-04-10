@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+from typing import Optional
+
+from .cli_error import CliError
+
+VDS_ERROR_MAP: dict[str, dict[str, Optional[str]]] = {
+    "400000": {
+        "condition": "Bad request",
+        "details": "The content of the request body is invalid. Check for missing or incomplete JSON.",
+        "hint": "Verify the --query JSON is valid and complete.",
+    },
+    "400800": {
+        "condition": "Invalid formula for calculation",
+        "details": "Invalid custom calculation syntax.",
+        "hint": "See https://help.tableau.com/current/pro/desktop/en-us/functions_operators.htm",
+    },
+    "400802": {
+        "condition": "Invalid API request",
+        "details": "The incoming request isn't valid per the OpenAPI specification.",
+        "hint": None,
+    },
+    "400803": {
+        "condition": "Validation failed",
+        "details": "The incoming request isn't valid per the validation rules.",
+        "hint": (
+            "Check that all field names and filter values match the datasource metadata. "
+            "Use `tableau-cli datasources metadata <luid>` to verify available fields."
+        ),
+    },
+    "400804": {
+        "condition": "Response too large",
+        "details": "The response value exceeds the limit.",
+        "hint": (
+            "You must apply a filter in your query to reduce the response size, "
+            "or use --limit to restrict row count."
+        ),
+    },
+    "401001": {
+        "condition": "Login error",
+        "details": "The login failed for the given user.",
+        "hint": "Check your PAT credentials with `tableau-cli config show`.",
+    },
+    "401002": {
+        "condition": "Invalid authorization credentials",
+        "details": "The provided auth token is formatted incorrectly.",
+        "hint": (
+            "Re-authenticate by updating your PAT with "
+            "`tableau-cli config set --pat-name <name> --pat-value <value>`."
+        ),
+    },
+    "403157": {
+        "condition": "Feature disabled",
+        "details": "The VizQL Data Service feature is disabled on this server.",
+        "hint": (
+            "Ask your Tableau Server admin to enable it via TSM. "
+            "See https://help.tableau.com/current/server-linux/en-us/cli_configuration-set_tsm.htm"
+        ),
+    },
+    "403800": {
+        "condition": "API access permission denied",
+        "details": "The user doesn't have API Access granted on the given data source.",
+        "hint": (
+            "Set the API Access capability for this data source to Allowed. "
+            "See https://help.tableau.com/current/online/en-us/permissions_capabilities.htm"
+        ),
+    },
+    "404934": {
+        "condition": "Unknown field",
+        "details": "The requested field doesn't exist in this datasource.",
+        "hint": (
+            "Use `tableau-cli datasources metadata <luid>` to see available fields "
+            "and their exact names."
+        ),
+    },
+    "404950": {
+        "condition": "API endpoint not found",
+        "details": "The VizQL Data Service endpoint doesn't exist on this server.",
+        "hint": "This feature may not be available on your Tableau Server version.",
+    },
+    "408000": {
+        "condition": "Request timeout",
+        "details": "The query timed out.",
+        "hint": (
+            "Try adding filters to reduce the data volume, "
+            "or increase the scope of your query."
+        ),
+    },
+    "429000": {
+        "condition": "Too many requests",
+        "details": "Rate limit exceeded.",
+        "hint": (
+            "Wait before retrying. "
+            "See https://help.tableau.com/current/api/vizql-data-service/en-us/docs/vds_limitations.html"
+        ),
+    },
+    "409000": {
+        "condition": "User already on site",
+        "details": "HTTP status conflict.",
+        "hint": None,
+    },
+    "500000": {
+        "condition": "Internal server error",
+        "details": "The request could not be completed.",
+        "hint": None,
+    },
+    "500810": {
+        "condition": "Empty table response",
+        "details": "The underlying data engine returned empty data.",
+        "hint": "The datasource may have no data, or your filters may be too restrictive.",
+    },
+    "500811": {
+        "condition": "Missing table metadata",
+        "details": "The underlying data engine returned empty metadata.",
+        "hint": None,
+    },
+    "500812": {
+        "condition": "Error while processing an error",
+        "details": "Internal processing error.",
+        "hint": None,
+    },
+    "501000": {
+        "condition": "Not implemented",
+        "details": "Can't find response from upstream server.",
+        "hint": None,
+    },
+    "503800": {
+        "condition": "VDS unavailable",
+        "details": "The underlying data engine is unavailable.",
+        "hint": "The server may be under maintenance. Try again later.",
+    },
+    "503801": {
+        "condition": "VDS discovery error",
+        "details": "The upstream service can't be found.",
+        "hint": "The server may be under maintenance. Try again later.",
+    },
+    "504000": {
+        "condition": "Gateway timeout",
+        "details": "The upstream service response timed out.",
+        "hint": "Try a simpler query with fewer fields or more restrictive filters.",
+    },
+}
+
+
+def handle_vds_error(
+    error_message: str,
+    http_status: int,
+    tableau_error_code: Optional[str],
+) -> CliError:
+    entry = VDS_ERROR_MAP.get(tableau_error_code or "")
+
+    if entry:
+        condition = entry["condition"]
+        return CliError(
+            error_type=condition or "tableau-error",
+            message=f"{condition}: {error_message}" if condition else error_message,
+            details=entry.get("details"),
+            hint=entry.get("hint"),
+        )
+
+    return CliError(
+        error_type="tableau-error",
+        message=error_message,
+    )
