@@ -1,5 +1,7 @@
 import { Zodios } from '@zodios/core';
 
+import { CliError, FeatureDisabledError } from '../../errors/cliError.js';
+import { isAxiosError } from '../../utils/axios.js';
 import { viewsApis } from '../apis/viewsApi.js';
 import { Pagination } from '../types/pagination.js';
 import { View } from '../types/view.js';
@@ -33,12 +35,40 @@ export default class ViewsMethods extends AuthenticatedMethods<typeof viewsApis>
     height?: number;
     format?: 'PNG' | 'SVG';
   }): Promise<string> => {
-    return await this._apiClient.queryViewImage({
-      params: { siteId: args.siteId, viewId: args.viewId },
-      queries: { vizWidth: args.width, vizHeight: args.height, resolution: 'high', format: args.format },
-      ...this.authHeader,
-      responseType: 'arraybuffer',
-    });
+    try {
+      return await this._apiClient.queryViewImage({
+        params: { siteId: args.siteId, viewId: args.viewId },
+        queries: { vizWidth: args.width, vizHeight: args.height, resolution: 'high', format: args.format },
+        ...this.authHeader,
+        responseType: 'arraybuffer',
+      });
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.data) {
+        let errorData = error.response.data;
+        // When responseType is 'arraybuffer', parse the response body
+        if (!errorData.error) {
+          try {
+            const text = new TextDecoder().decode(errorData);
+            errorData = JSON.parse(text);
+          } catch {
+            throw error;
+          }
+        }
+        if (errorData.error?.code === '403157') {
+          throw new FeatureDisabledError(
+            'The image format feature is disabled on this Tableau Server.',
+          );
+        }
+        if (errorData.error) {
+          const { summary, detail } = errorData.error;
+          throw new CliError({
+            errorType: 'view-image-error',
+            message: detail ? `${summary}: ${detail}` : summary,
+          });
+        }
+      }
+      throw error;
+    }
   };
 
   queryViewsForSite = async (args: {

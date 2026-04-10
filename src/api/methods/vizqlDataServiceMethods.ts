@@ -1,5 +1,7 @@
-import { Zodios } from '@zodios/core';
+import { isErrorFromAlias, Zodios } from '@zodios/core';
 
+import { CliError, FeatureDisabledError } from '../../errors/cliError.js';
+import { handleVdsError } from '../../errors/vdsErrorHandler.js';
 import {
   MetadataResponse,
   QueryOutput,
@@ -9,6 +11,10 @@ import {
 } from '../apis/vizqlDataServiceApi.js';
 import AuthenticatedMethods, { RestApiCredentials } from './authenticatedMethods.js';
 
+const VDS_DISABLED_MESSAGE =
+  'The VizQL Data Service is disabled on this Tableau Server. ' +
+  'To enable it, use TSM using the instructions at https://help.tableau.com/current/server-linux/en-us/cli_configuration-set_tsm.htm#featuresvizqldataservicedeploywithtsm.';
+
 export default class VizqlDataServiceMethods extends AuthenticatedMethods<
   typeof vizqlDataServiceApis
 > {
@@ -17,10 +23,35 @@ export default class VizqlDataServiceMethods extends AuthenticatedMethods<
   }
 
   queryDatasource = async (queryRequest: QueryRequest): Promise<QueryOutput> => {
-    return await this._apiClient.queryDatasource(queryRequest, { ...this.authHeader });
+    try {
+      return await this._apiClient.queryDatasource(queryRequest, { ...this.authHeader });
+    } catch (error) {
+      if (isErrorFromAlias(this._apiClient.api, 'queryDatasource', error)) {
+        if (error.response.status === 404) {
+          throw new FeatureDisabledError(VDS_DISABLED_MESSAGE);
+        }
+        const data = error.response.data as Record<string, string | undefined>;
+        throw handleVdsError(
+          data.message ?? 'Unknown Tableau error',
+          error.response.status,
+          data.errorCode ?? data['tab-error-code'],
+        );
+      }
+      throw error;
+    }
   };
 
   readMetadata = async (request: ReadMetadataRequest): Promise<MetadataResponse> => {
-    return await this._apiClient.readMetadata(request, { ...this.authHeader });
+    try {
+      return await this._apiClient.readMetadata(request, { ...this.authHeader });
+    } catch (error) {
+      if (
+        isErrorFromAlias(this._apiClient.api, 'readMetadata', error) &&
+        error.response.status === 404
+      ) {
+        throw new FeatureDisabledError(VDS_DISABLED_MESSAGE);
+      }
+      throw error;
+    }
   };
 }
