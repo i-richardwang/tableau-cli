@@ -1,0 +1,32 @@
+import { makeApi, makeEndpoint, ZodiosEndpointDefinitions } from '@zodios/core';
+import { z } from 'zod';
+
+import { credentialsSchema } from '../types/credentials.js';
+
+const signInRequestSchema = z.object({
+  credentials: z.object({
+    site: z.object({ contentUrl: z.string() }),
+    personalAccessTokenName: z.string(),
+    personalAccessTokenSecret: z.string(),
+  }),
+});
+
+const signInEndpoint = makeEndpoint({
+  method: 'post',
+  path: '/auth/signin',
+  alias: 'signIn',
+  description: 'Signs in with PAT credentials.',
+  response: credentialsSchema,
+  parameters: [{ name: 'credentials', type: 'Body', schema: signInRequestSchema }],
+});
+
+const signOutEndpoint = makeEndpoint({
+  method: 'post',
+  path: '/auth/signout',
+  alias: 'signOut',
+  description: 'Signs out of the current session.',
+  response: z.void(),
+});
+
+const authenticationApi = makeApi([signInEndpoint, signOutEndpoint]);
+export const authenticationApis = [...authenticationApi] as const satisfies ZodiosEndpointDefinitions;

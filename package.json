@@ -1,0 +1,28 @@
+{
+  "name": "tableau-cli",
+  "version": "0.1.0",
+  "description": "CLI tool for interacting with Tableau Server/Cloud",
+  "type": "module",
+  "bin": {
+    "tableau-cli": "./build/index.js"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=build/index.js --banner:js='#!/usr/bin/env node' --packages=external",
+    "dev": "tsx src/index.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zodios/core": "^10.9.6",
+    "commander": "^13.1.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.3",
+    "@types/node": "^22.15.3"
+  },
+  "engines": {
+    "node": ">=22.7.5"
+  }
+}
