@@ -111,9 +111,10 @@ class RestApi:
         resp = self._client.get(url, params=params, headers=self._auth_headers())
         resp.raise_for_status()
         data = resp.json()
+        raw_list = data.get("datasources", {}).get("datasource") or []
         return {
             "pagination": _parse_pagination(data["pagination"]),
-            "datasources": data.get("datasources", {}).get("datasource") or [],
+            "datasources": [_shape_datasource(d) for d in raw_list],
         }
 
     # ── Views (REST API) ────────────────────────────────────────────
@@ -137,9 +138,10 @@ class RestApi:
         resp = self._client.get(url, params=params, headers=self._auth_headers())
         resp.raise_for_status()
         data = resp.json()
+        raw_list = data.get("views", {}).get("view") or []
         return {
             "pagination": _parse_pagination(data["pagination"]),
-            "views": data.get("views", {}).get("view") or [],
+            "views": [_shape_view(v) for v in raw_list],
         }
 
     def query_view_data(self, *, view_id: str, site_id: str) -> str:
@@ -204,7 +206,8 @@ class RestApi:
         params = {"includeUsageStatistics": "true"}
         resp = self._client.get(url, params=params, headers=self._auth_headers())
         resp.raise_for_status()
-        return resp.json()["views"]["view"]
+        raw_list = resp.json()["views"]["view"]
+        return [_shape_view(v) for v in raw_list]
 
     # ── Workbooks (REST API) ────────────────────────────────────────
 
@@ -212,7 +215,7 @@ class RestApi:
         url = f"{self._base_url}/sites/{site_id}/workbooks/{workbook_id}"
         resp = self._client.get(url, headers=self._auth_headers())
         resp.raise_for_status()
-        return resp.json()["workbook"]
+        return _shape_workbook(resp.json()["workbook"])
 
     def query_workbooks_for_site(
         self,
@@ -233,9 +236,10 @@ class RestApi:
         resp = self._client.get(url, params=params, headers=self._auth_headers())
         resp.raise_for_status()
         data = resp.json()
+        raw_list = data.get("workbooks", {}).get("workbook") or []
         return {
             "pagination": _parse_pagination(data["pagination"]),
-            "workbooks": data.get("workbooks", {}).get("workbook") or [],
+            "workbooks": [_shape_workbook(w) for w in raw_list],
         }
 
     # ── Content Exploration (Search) ────────────────────────────────
@@ -272,7 +276,7 @@ class RestApi:
         body = {"datasource": {"datasourceLuid": datasource_luid}}
         try:
             resp = self._client.post(url, json=body, headers=self._auth_headers())
-        except httpx.ConnectError:
+        except httpx.TransportError:
             raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
         if resp.status_code == 404:
             raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
@@ -289,7 +293,7 @@ class RestApi:
             body["options"] = options
         try:
             resp = self._client.post(url, json=body, headers=self._auth_headers())
-        except httpx.ConnectError:
+        except httpx.TransportError:
             raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
         if resp.status_code == 404:
             raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
@@ -324,3 +328,84 @@ def _parse_pagination(p: dict[str, Any]) -> dict[str, int]:
         "pageSize": int(p["pageSize"]),
         "totalAvailable": int(p["totalAvailable"]),
     }
+
+
+# ── Response shaping (equivalent to Zod schemas in TS version) ──────────
+
+
+def _shape_project(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {"name": "", "id": ""}
+    return {"name": raw.get("name", ""), "id": raw.get("id", "")}
+
+
+def _shape_tags(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    tag = raw.get("tag")
+    if isinstance(tag, list):
+        return {"tag": [{"label": t["label"]} for t in tag if isinstance(t, dict) and "label" in t]}
+    return {}
+
+
+def _shape_datasource(raw: dict[str, Any]) -> dict[str, Any]:
+    """Match TS dataSourceSchema: {id, name, description?, project, tags}"""
+    result: dict[str, Any] = {
+        "id": raw.get("id", ""),
+        "name": raw.get("name", ""),
+    }
+    if "description" in raw:
+        result["description"] = raw["description"]
+    result["project"] = _shape_project(raw.get("project"))
+    result["tags"] = _shape_tags(raw.get("tags"))
+    return result
+
+
+def _shape_view(raw: dict[str, Any]) -> dict[str, Any]:
+    """Match TS viewSchema: {id, name, createdAt, updatedAt, workbook?, owner?, project?, tags, usage?}"""
+    result: dict[str, Any] = {
+        "id": raw.get("id", ""),
+        "name": raw.get("name", ""),
+        "createdAt": raw.get("createdAt", ""),
+        "updatedAt": raw.get("updatedAt", ""),
+    }
+    if "workbook" in raw and isinstance(raw["workbook"], dict):
+        result["workbook"] = {"id": raw["workbook"].get("id", "")}
+    if "owner" in raw and isinstance(raw["owner"], dict):
+        result["owner"] = {"id": raw["owner"].get("id", "")}
+    if "project" in raw and isinstance(raw["project"], dict):
+        result["project"] = {"id": raw["project"].get("id", "")}
+    result["tags"] = _shape_tags(raw.get("tags"))
+    if "usage" in raw and isinstance(raw["usage"], dict):
+        result["usage"] = {"totalViewCount": int(raw["usage"].get("totalViewCount", 0))}
+    return result
+
+
+def _shape_workbook(raw: dict[str, Any]) -> dict[str, Any]:
+    """Match TS workbookSchema: {id, name, description?, webpageUrl?, contentUrl, project?, showTabs, defaultViewId?, tags, views?}"""
+    result: dict[str, Any] = {
+        "id": raw.get("id", ""),
+        "name": raw.get("name", ""),
+    }
+    if "description" in raw:
+        result["description"] = raw["description"]
+    if "webpageUrl" in raw:
+        result["webpageUrl"] = raw["webpageUrl"]
+    result["contentUrl"] = raw.get("contentUrl", "")
+    if "project" in raw:
+        result["project"] = _shape_project(raw.get("project"))
+    # z.coerce.boolean() — convert string "true"/"false" to bool
+    show_tabs = raw.get("showTabs", False)
+    if isinstance(show_tabs, str):
+        result["showTabs"] = show_tabs.lower() == "true"
+    else:
+        result["showTabs"] = bool(show_tabs)
+    if "defaultViewId" in raw:
+        result["defaultViewId"] = raw["defaultViewId"]
+    result["tags"] = _shape_tags(raw.get("tags"))
+    if "views" in raw and isinstance(raw["views"], dict):
+        views_list = raw["views"].get("view", [])
+        result["views"] = {
+            "view": [_shape_view(v) for v in views_list] if isinstance(views_list, list) else []
+        }
+    return result

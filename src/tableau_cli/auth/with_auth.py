@@ -26,7 +26,9 @@ def with_auth(config: Config, fn: Callable[[RestApi], T]) -> T:
                 f"Sign-in failed (HTTP {status}). The PAT may be expired or invalid."
             )
         raise
-    except httpx.ConnectError as e:
+    except httpx.TransportError as e:
+        # Covers ConnectError, ConnectTimeout, ReadTimeout, PoolTimeout, DNS failures, etc.
+        # Equivalent to TS version's `if (!error.response)` check.
         raise AuthenticationError(
             f"Cannot connect to Tableau Server at {config.server}: {e}. Check the server URL."
         )

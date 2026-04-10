@@ -75,4 +75,5 @@ def views_image(view_id, width, height, img_format, output_path):
             f.write(image_data)
         sys.stderr.write(f"Image saved to {output_path}\n")
     else:
-        sys.stdout.buffer.write(image_data)
+        import base64
+        sys.stdout.write(base64.b64encode(image_data).decode("ascii"))

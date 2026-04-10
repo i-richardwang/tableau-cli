@@ -43,6 +43,15 @@ def to_error_output(err: Exception) -> dict[str, Any]:
             **({"details": err.response.text} if err.response.text else {}),
         }
 
+    # httpx transport errors (network unreachable, timeout, DNS failure, etc.)
+    # Equivalent to TS: isAxiosError(err) && !err.response
+    if isinstance(err, httpx.TransportError):
+        return {
+            "isError": True,
+            "errorType": "http-error",
+            "message": f"Network error: {err}",
+        }
+
     # Config validation errors
     if isinstance(err, RuntimeError) and str(err).startswith("Missing required config:"):
         return {
