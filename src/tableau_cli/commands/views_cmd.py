@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 
 import click
@@ -73,7 +74,9 @@ def views_image(view_id, width, height, img_format, output_path):
     if output_path:
         with open(output_path, "wb") as f:
             f.write(image_data)
-        sys.stderr.write(f"Image saved to {output_path}\n")
+        abs_path = os.path.abspath(output_path)
+        sys.stderr.write(f"Image saved to {abs_path}\n")
+        output({"filePath": abs_path}, "json")
     else:
         import base64
         sys.stdout.write(base64.b64encode(image_data).decode("ascii"))

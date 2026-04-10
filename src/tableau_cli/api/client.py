@@ -117,6 +117,30 @@ class RestApi:
             "datasources": [_shape_datasource(d) for d in raw_list],
         }
 
+    def download_datasource(self, *, datasource_id: str, site_id: str) -> tuple[bytes, str]:
+        """Download datasource content. Returns (data, filename)."""
+        url = f"{self._base_url}/sites/{site_id}/datasources/{datasource_id}/content"
+        resp = self._client.get(url, headers=self._auth_headers())
+        resp.raise_for_status()
+
+        # Extract filename from Content-Disposition header
+        filename = f"{datasource_id}.tdsx"
+        cd = resp.headers.get("content-disposition", "")
+        if "filename*=" in cd:
+            # RFC 5987: filename*=UTF-8''encoded_name.tdsx
+            part = cd.split("filename*=", 1)[1].split(";", 1)[0].strip()
+            if "''" in part:
+                from urllib.parse import unquote
+
+                filename = unquote(part.split("''", 1)[1])
+        elif "filename=" in cd:
+            from urllib.parse import unquote_plus
+
+            part = cd.split("filename=", 1)[1].split(";", 1)[0].strip()
+            filename = unquote_plus(part.strip('"'))
+
+        return resp.content, filename
+
     # ── Views (REST API) ────────────────────────────────────────────
 
     def query_views_for_site(
