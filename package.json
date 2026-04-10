@@ -2,6 +2,7 @@
   "name": "tableau-cli",
   "version": "0.1.0",
   "description": "CLI tool for interacting with Tableau Server/Cloud",
+  "license": "Apache-2.0",
   "type": "module",
   "bin": {
     "tableau-cli": "./build/index.js"

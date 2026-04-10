@@ -1,4 +1,4 @@
-import { isErrorFromAlias, Zodios } from '@zodios/core';
+import { isErrorFromAlias, Zodios, ZodiosError } from '@zodios/core';
 
 import { CliError, FeatureDisabledError } from '../../errors/cliError.js';
 import { handleVdsError } from '../../errors/vdsErrorHandler.js';
@@ -36,6 +36,13 @@ export default class VizqlDataServiceMethods extends AuthenticatedMethods<
           error.response.status,
           data.errorCode ?? data['tab-error-code'],
         );
+      }
+      if (error instanceof ZodiosError) {
+        throw new CliError({
+          errorType: 'validation-error',
+          message: `Response validation failed: ${error.message}`,
+          hint: 'The server returned an unexpected response format. This may indicate an API version mismatch.',
+        });
       }
       throw error;
     }

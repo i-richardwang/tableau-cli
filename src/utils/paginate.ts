@@ -25,7 +25,9 @@ export async function paginate<T>({ pageConfig, getDataFn }: PaginateArgs<T>): P
     });
 
     if (nextData.length === 0) {
-      break;
+      throw new Error(
+        `No more data available. Last fetched page number: ${pageNumber}, Total available: ${totalAvailable}, Total fetched: ${result.length}`,
+      );
     }
 
     ({ totalAvailable, pageNumber } = nextPagination);

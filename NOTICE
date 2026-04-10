@@ -1,0 +1,8 @@
+tableau-cli
+Copyright 2025 Richard Wang
+
+This project is a derivative work based on @tableau/mcp-server
+(https://github.com/tableau/tableau-mcp), which is licensed under
+the Apache License, Version 2.0.
+
+Original work Copyright Tableau.
