@@ -4,12 +4,16 @@ import os
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 import click
 
 from ..errors.cli_error import CliError
 from ..output.format import output
+
+if TYPE_CHECKING:
+    import polars as pl
 
 CONVERT_DEPS = ("pantab", "polars", "pyarrow")
 SUPPORTED_FORMATS = ("parquet", "csv")
@@ -59,7 +63,7 @@ def _extract_hyper_from_tdsx(tdsx_path: Path, target_dir: Path) -> Path:
         return extracted
 
 
-def _read_hyper(hyper_path: Path) -> "pl.DataFrame":
+def _read_hyper(hyper_path: Path) -> pl.DataFrame:
     """Read .hyper file and return as Polars DataFrame."""
     import pantab
     import polars as pl
@@ -79,7 +83,7 @@ def _read_hyper(hyper_path: Path) -> "pl.DataFrame":
     return pl.from_pandas(next(iter(frames.values())))
 
 
-def _write_df(df: "pl.DataFrame", output_path: Path, to: str) -> None:
+def _write_df(df: pl.DataFrame, output_path: Path, to: str) -> None:
     """Write DataFrame to the specified format."""
     if to == "parquet":
         df.write_parquet(output_path)
@@ -89,8 +93,10 @@ def _write_df(df: "pl.DataFrame", output_path: Path, to: str) -> None:
 
 @click.command("convert")
 @click.argument("input_path", type=click.Path(exists=True))
-@click.option("--to", "to_fmt", default="parquet", type=click.Choice(SUPPORTED_FORMATS), help="Output format (default: parquet)")
-@click.option("-o", "--output", "output_path", default=None, help="Output file path or directory (default: same directory as input)")
+@click.option(
+    "--to", "to_fmt", default="parquet", type=click.Choice(SUPPORTED_FORMATS), help="Output format (default: parquet)"
+)
+@click.option("-o", "--output", "output_path", default=None, help="Output file or directory (default: same as input)")
 def convert_command(input_path, to_fmt, output_path):
     """Convert TDSX/HYPER files to Parquet or CSV format."""
     _check_convert_deps()

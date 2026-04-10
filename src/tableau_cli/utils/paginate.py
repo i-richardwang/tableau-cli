@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 
 def paginate(
     *,
-    page_size: Optional[int] = None,
-    limit: Optional[int] = None,
-    get_data_fn: Callable[[Optional[int], Optional[int]], dict[str, Any]],
+    page_size: int | None = None,
+    limit: int | None = None,
+    get_data_fn: Callable[[int | None, int | None], dict[str, Any]],
 ) -> list[Any]:
     """Paginate through Tableau REST API results.
 

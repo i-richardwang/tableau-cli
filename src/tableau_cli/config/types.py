@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -14,7 +13,7 @@ class Config:
 
 @dataclass
 class PartialConfig:
-    server: Optional[str] = None
-    site_name: Optional[str] = None
-    pat_name: Optional[str] = None
-    pat_value: Optional[str] = None
+    server: str | None = None
+    site_name: str | None = None
+    pat_name: str | None = None
+    pat_value: str | None = None

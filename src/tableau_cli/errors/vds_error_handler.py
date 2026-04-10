@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from .cli_error import CliError
 
 # condition and details texts are aligned word-for-word with MCP's queryDatasourceErrorHandler.ts.
 # hint is CLI-specific added value (agent-friendly actionable guidance).
-VDS_ERROR_MAP: dict[str, dict[str, Optional[str]]] = {
+VDS_ERROR_MAP: dict[str, dict[str, str | None]] = {
     "400000": {
         "condition": "Bad request",
         "details": "The content of the request body is invalid. Check for missing or incomplete JSON.",
@@ -44,8 +42,7 @@ VDS_ERROR_MAP: dict[str, dict[str, Optional[str]]] = {
         "condition": "Invalid authorization credentials",
         "details": "The provided auth token is formatted incorrectly.",
         "hint": (
-            "Re-authenticate by updating your PAT with "
-            "`tableau-cli config set --pat-name <name> --pat-value <value>`."
+            "Re-authenticate by updating your PAT with `tableau-cli config set --pat-name <name> --pat-value <value>`."
         ),
     },
     "403157": {
@@ -68,10 +65,7 @@ VDS_ERROR_MAP: dict[str, dict[str, Optional[str]]] = {
     "404934": {
         "condition": "Unknown field",
         "details": "The requested field doesn't exist.",
-        "hint": (
-            "Use `tableau-cli datasources metadata <luid>` to see available fields "
-            "and their exact names."
-        ),
+        "hint": ("Use `tableau-cli datasources metadata <luid>` to see available fields and their exact names."),
     },
     "404950": {
         "condition": "API endpoint not found",
@@ -142,7 +136,7 @@ VDS_ERROR_MAP: dict[str, dict[str, Optional[str]]] = {
 def handle_vds_error(
     error_message: str,
     http_status: int,
-    tableau_error_code: Optional[str],
+    tableau_error_code: str | None,
 ) -> CliError:
     entry = VDS_ERROR_MAP.get(tableau_error_code or "")
 

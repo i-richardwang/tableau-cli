@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 def get_graphql_query(datasource_luid: str) -> str:
@@ -71,7 +71,7 @@ def get_graphql_query(datasource_luid: str) -> str:
   }}"""
 
 
-def _normalize_logical_table_id(logical_table_id: Optional[str]) -> Optional[str]:
+def _normalize_logical_table_id(logical_table_id: str | None) -> str | None:
     if logical_table_id is None:
         return None
     normalized = logical_table_id.strip()
@@ -81,18 +81,14 @@ def _normalize_logical_table_id(logical_table_id: Optional[str]) -> Optional[str
 def _group_fields_by_logical_table_id(
     fields: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    grouped: dict[Optional[str], list[dict[str, Any]]] = {}
+    grouped: dict[str | None, list[dict[str, Any]]] = {}
     for field in fields:
         key = field.get("logicalTableId")
         grouped.setdefault(key, []).append(field)
-    return [
-        {"logicalTableId": k, "fields": v} for k, v in grouped.items()
-    ]
+    return [{"logicalTableId": k, "fields": v} for k, v in grouped.items()]
 
 
-def _populate_field_with_additional_properties(
-    source_field: dict[str, Any], target_field: dict[str, Any]
-) -> None:
+def _populate_field_with_additional_properties(source_field: dict[str, Any], target_field: dict[str, Any]) -> None:
     if source_field.get("description"):
         target_field["description"] = source_field["description"]
     desc_inherited = source_field.get("descriptionInherited")
@@ -114,7 +110,7 @@ def _populate_field_with_additional_properties(
         target_field["binSize"] = source_field["binSize"]
 
 
-def _build_parameters(extra_data: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_parameters(extra_data: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not extra_data or not extra_data.get("parameters"):
         return []
     parameters: list[dict[str, Any]] = []

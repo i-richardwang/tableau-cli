@@ -45,20 +45,16 @@ def output_table(rows: list[dict[str, Any]]) -> None:
         return
 
     columns = list(rows[0].keys())
-    formatted = [
-        {col: _format_value(row.get(col)) for col in columns} for row in rows
-    ]
+    formatted = [{col: _format_value(row.get(col)) for col in columns} for row in rows]
 
-    widths = [
-        max(len(col), *(len(row[col]) for row in formatted)) for col in columns
-    ]
+    widths = [max(len(col), *(len(row[col]) for row in formatted)) for col in columns]
 
-    header = "  ".join(col.upper().ljust(w) for col, w in zip(columns, widths))
+    header = "  ".join(col.upper().ljust(w) for col, w in zip(columns, widths, strict=True))
     separator = "  ".join("-" * w for w in widths)
 
     sys.stdout.write(header + "\n")
     sys.stdout.write(separator + "\n")
 
     for row in formatted:
-        line = "  ".join(row[col].ljust(w) for col, w in zip(columns, widths))
+        line = "  ".join(row[col].ljust(w) for col, w in zip(columns, widths, strict=True))
         sys.stdout.write(line + "\n")

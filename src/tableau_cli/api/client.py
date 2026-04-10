@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -29,7 +30,7 @@ class Credentials:
 class RestApi:
     def __init__(self, host: str) -> None:
         self._host = host.rstrip("/")
-        self._creds: Optional[Credentials] = None
+        self._creds: Credentials | None = None
         self._client = httpx.Client(
             timeout=TIMEOUT_S,
             headers={"Accept": "application/json", "Content-Type": "application/json"},
@@ -84,10 +85,8 @@ class RestApi:
         if not self._creds:
             return
         url = f"{self._base_url}/auth/signout"
-        try:
+        with contextlib.suppress(Exception):
             self._client.post(url, headers=self._auth_headers())
-        except Exception:
-            pass
         self._creds = None
 
     # ── Datasources (REST API) ──────────────────────────────────────
@@ -97,8 +96,8 @@ class RestApi:
         *,
         site_id: str,
         filter_: str = "",
-        page_size: Optional[int] = None,
-        page_number: Optional[int] = None,
+        page_size: int | None = None,
+        page_number: int | None = None,
     ) -> dict[str, Any]:
         url = f"{self._base_url}/sites/{site_id}/datasources"
         params: dict[str, Any] = {}
@@ -148,8 +147,8 @@ class RestApi:
         *,
         site_id: str,
         filter_: str = "",
-        page_size: Optional[int] = None,
-        page_number: Optional[int] = None,
+        page_size: int | None = None,
+        page_number: int | None = None,
     ) -> dict[str, Any]:
         url = f"{self._base_url}/sites/{site_id}/views"
         params: dict[str, Any] = {"includeUsageStatistics": "true"}
@@ -179,8 +178,8 @@ class RestApi:
         *,
         view_id: str,
         site_id: str,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
+        width: int | None = None,
+        height: int | None = None,
         format_: str = "PNG",
     ) -> bytes:
         url = f"{self._base_url}/sites/{site_id}/views/{view_id}/image"
@@ -201,6 +200,7 @@ class RestApi:
                     error_data = {"error": None}
                     text = resp.text
                     import json as _json
+
                     error_data = _json.loads(text)
                 except Exception:
                     resp.raise_for_status()
@@ -223,9 +223,7 @@ class RestApi:
             resp.raise_for_status()
         return resp.content
 
-    def query_views_for_workbook(
-        self, *, workbook_id: str, site_id: str
-    ) -> list[dict[str, Any]]:
+    def query_views_for_workbook(self, *, workbook_id: str, site_id: str) -> list[dict[str, Any]]:
         url = f"{self._base_url}/sites/{site_id}/workbooks/{workbook_id}/views"
         params = {"includeUsageStatistics": "true"}
         resp = self._client.get(url, params=params, headers=self._auth_headers())
@@ -246,8 +244,8 @@ class RestApi:
         *,
         site_id: str,
         filter_: str = "",
-        page_size: Optional[int] = None,
-        page_number: Optional[int] = None,
+        page_size: int | None = None,
+        page_number: int | None = None,
     ) -> dict[str, Any]:
         url = f"{self._base_url}/sites/{site_id}/workbooks"
         params: dict[str, Any] = {}
@@ -271,11 +269,11 @@ class RestApi:
     def search_content(
         self,
         *,
-        terms: Optional[str] = None,
-        page: Optional[int] = None,
-        limit: Optional[int] = None,
-        order_by: Optional[str] = None,
-        filter_: Optional[str] = None,
+        terms: str | None = None,
+        page: int | None = None,
+        limit: int | None = None,
+        order_by: str | None = None,
+        filter_: str | None = None,
     ) -> dict[str, Any]:
         url = f"{self._base_url_no_version}/search"
         params: dict[str, Any] = {}
@@ -300,14 +298,14 @@ class RestApi:
         body = {"datasource": {"datasourceLuid": datasource_luid}}
         try:
             resp = self._client.post(url, json=body, headers=self._auth_headers())
-        except httpx.TransportError:
-            raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
+        except httpx.TransportError as exc:
+            raise FeatureDisabledError(VDS_DISABLED_MESSAGE) from exc
         if resp.status_code == 404:
             raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
         resp.raise_for_status()
         return resp.json()
 
-    def query_datasource(self, *, datasource_luid: str, query: dict, options: Optional[dict] = None) -> dict[str, Any]:
+    def query_datasource(self, *, datasource_luid: str, query: dict, options: dict | None = None) -> dict[str, Any]:
         url = f"{self._host}/api/v1/vizql-data-service/query-datasource"
         body: dict[str, Any] = {
             "datasource": {"datasourceLuid": datasource_luid},
@@ -317,8 +315,8 @@ class RestApi:
             body["options"] = options
         try:
             resp = self._client.post(url, json=body, headers=self._auth_headers())
-        except httpx.TransportError:
-            raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
+        except httpx.TransportError as exc:
+            raise FeatureDisabledError(VDS_DISABLED_MESSAGE) from exc
         if resp.status_code == 404:
             raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
         if resp.status_code >= 400:
@@ -336,9 +334,7 @@ class RestApi:
 
     def graphql(self, query: str) -> dict[str, Any]:
         url = f"{self._host}/api/metadata/graphql"
-        resp = self._client.post(
-            url, json={"query": query}, headers=self._auth_headers()
-        )
+        resp = self._client.post(url, json={"query": query}, headers=self._auth_headers())
         resp.raise_for_status()
         return resp.json()
 
@@ -406,7 +402,7 @@ def _shape_view(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _shape_workbook(raw: dict[str, Any]) -> dict[str, Any]:
-    """Match TS workbookSchema: {id, name, description?, webpageUrl?, contentUrl, project?, showTabs, defaultViewId?, tags, views?}"""
+    """Match TS workbookSchema: id, name, description?, webpageUrl?, contentUrl, project?, showTabs, etc."""
     result: dict[str, Any] = {
         "id": raw.get("id", ""),
         "name": raw.get("name", ""),
@@ -429,7 +425,5 @@ def _shape_workbook(raw: dict[str, Any]) -> dict[str, Any]:
     result["tags"] = _shape_tags(raw.get("tags"))
     if "views" in raw and isinstance(raw["views"], dict):
         views_list = raw["views"].get("view", [])
-        result["views"] = {
-            "view": [_shape_view(v) for v in views_list] if isinstance(views_list, list) else []
-        }
+        result["views"] = {"view": [_shape_view(v) for v in views_list] if isinstance(views_list, list) else []}
     return result

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 import httpx
 
@@ -22,16 +23,14 @@ def with_auth(config: Config, fn: Callable[[RestApi], T]) -> T:
     except httpx.HTTPStatusError as e:
         status = e.response.status_code
         if status in (401, 403):
-            raise AuthenticationError(
-                f"Sign-in failed (HTTP {status}). The PAT may be expired or invalid."
-            )
+            raise AuthenticationError(f"Sign-in failed (HTTP {status}). The PAT may be expired or invalid.") from e
         raise
     except httpx.TransportError as e:
         # Covers ConnectError, ConnectTimeout, ReadTimeout, PoolTimeout, DNS failures, etc.
         # Equivalent to TS version's `if (!error.response)` check.
         raise AuthenticationError(
             f"Cannot connect to Tableau Server at {config.server}: {e}. Check the server URL."
-        )
+        ) from e
     try:
         return fn(api)
     finally:

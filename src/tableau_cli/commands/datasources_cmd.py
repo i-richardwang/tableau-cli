@@ -48,23 +48,19 @@ def datasources_list(filter_, page_size, limit, fmt):
 
 @datasources_group.command("download")
 @click.argument("datasource_id")
-@click.option("-o", "--output", "output_path", default=".", help="Output file path or directory (default: current directory)")
+@click.option(
+    "-o", "--output", "output_path", default=".", help="Output file path or directory (default: current directory)"
+)
 def datasources_download(datasource_id, output_path):
     """Download a datasource file (.tdsx)."""
     config = resolve_config()
 
     data, filename = with_auth(
         config,
-        lambda api: api.download_datasource(
-            datasource_id=datasource_id, site_id=api.site_id
-        ),
+        lambda api: api.download_datasource(datasource_id=datasource_id, site_id=api.site_id),
     )
 
-    # Resolve final file path
-    if os.path.isdir(output_path):
-        file_path = os.path.join(output_path, filename)
-    else:
-        file_path = output_path
+    file_path = os.path.join(output_path, filename) if os.path.isdir(output_path) else output_path
 
     with open(file_path, "wb") as f:
         f.write(data)

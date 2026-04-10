@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 class CliError(Exception):
@@ -9,8 +9,8 @@ class CliError(Exception):
         *,
         error_type: str,
         message: str,
-        details: Optional[str] = None,
-        hint: Optional[str] = None,
+        details: str | None = None,
+        hint: str | None = None,
     ):
         super().__init__(message)
         self.error_type = error_type
@@ -31,7 +31,7 @@ class CliError(Exception):
 
 
 class FeatureDisabledError(CliError):
-    def __init__(self, message: str, hint: Optional[str] = None):
+    def __init__(self, message: str, hint: str | None = None):
         super().__init__(error_type="feature-disabled", message=message, hint=hint)
 
 
@@ -40,8 +40,5 @@ class AuthenticationError(CliError):
         super().__init__(
             error_type="authentication-error",
             message=message,
-            hint=(
-                "Check your PAT credentials with `tableau-cli config show`. "
-                "Ensure the token has not expired."
-            ),
+            hint=("Check your PAT credentials with `tableau-cli config show`. Ensure the token has not expired."),
         )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 def _get_reduced_search_item_content(content: dict[str, Any]) -> dict[str, Any]:

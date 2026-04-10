@@ -50,9 +50,7 @@ def workbooks_get(workbook_id, fmt):
 
         # Enrich views with usage statistics (consistent with MCP behavior)
         if workbook.get("views"):
-            views = api.query_views_for_workbook(
-                workbook_id=workbook_id, site_id=api.site_id
-            )
+            views = api.query_views_for_workbook(workbook_id=workbook_id, site_id=api.site_id)
             workbook["views"]["view"] = views
 
         return workbook

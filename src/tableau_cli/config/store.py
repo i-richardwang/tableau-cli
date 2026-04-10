@@ -47,8 +47,7 @@ def resolve_config() -> Config:
 
     if not server:
         raise RuntimeError(
-            "Missing required config: server. "
-            "Set via `tableau-cli config set --server <url>` or SERVER env var."
+            "Missing required config: server. Set via `tableau-cli config set --server <url>` or SERVER env var."
         )
     if not pat_name or not pat_value:
         raise RuntimeError(
