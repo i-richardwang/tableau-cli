@@ -78,6 +78,10 @@ export function handleVdsError(
       details = 'Rate limit exceeded.';
       hint = 'Wait before retrying. See https://help.tableau.com/current/api/vizql-data-service/en-us/docs/vds_limitations.html';
       break;
+    case '409000':
+      condition = 'User already on site';
+      details = 'HTTP status conflict.';
+      break;
     case '500000':
       condition = 'Internal server error';
       details = 'The request could not be completed.';
@@ -91,9 +95,22 @@ export function handleVdsError(
       condition = 'Missing table metadata';
       details = 'The underlying data engine returned empty metadata.';
       break;
+    case '500812':
+      condition = 'Error while processing an error';
+      details = 'Internal processing error.';
+      break;
+    case '501000':
+      condition = 'Not implemented';
+      details = "Can't find response from upstream server.";
+      break;
     case '503800':
       condition = 'VDS unavailable';
       details = 'The underlying data engine is unavailable.';
+      hint = 'The server may be under maintenance. Try again later.';
+      break;
+    case '503801':
+      condition = 'VDS discovery error';
+      details = "The upstream service can't be found.";
       hint = 'The server may be under maintenance. Try again later.';
       break;
     case '504000':

@@ -55,8 +55,12 @@ export default class ViewsMethods extends AuthenticatedMethods<typeof viewsApis>
           }
         }
         if (errorData.error?.code === '403157') {
+          const isSvg = args.format === 'SVG';
           throw new FeatureDisabledError(
-            'The image format feature is disabled on this Tableau Server.',
+            isSvg
+              ? 'SVG format is not supported on this Tableau Server. It requires Tableau 2026.2.0 or later.'
+              : 'The image format feature is disabled on this Tableau Server.',
+            isSvg ? 'Retry with --img-format PNG instead.' : undefined,
           );
         }
         if (errorData.error) {
