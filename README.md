@@ -21,7 +21,7 @@ git clone <repo-url>
 cd tableau-cli
 pip install -e .
 
-# Optional: install conversion dependencies (TDSX/HYPER → Parquet)
+# Optional: install conversion dependencies (TDSX/HYPER → Parquet/CSV)
 pip install -e ".[convert]"
 ```
 
@@ -96,18 +96,19 @@ tableau-cli views image <viewId> --width 1200 --height 800 --img-format SVG -o d
 
 ### Convert
 
-Convert Tableau TDSX/HYPER files to Parquet format. Requires `pip install tableau-cli[convert]`.
+Convert Tableau TDSX/HYPER files to Parquet or CSV. Requires `pip install tableau-cli[convert]`.
 
 ```bash
-# Convert TDSX to Parquet (output alongside input by default)
+# Convert TDSX to Parquet (default)
 tableau-cli convert data.tdsx
-
-# Convert to specific directory or file
 tableau-cli convert data.tdsx -o ./output/
-tableau-cli convert data.tdsx -o ./output/custom-name.parquet
+
+# Convert to CSV
+tableau-cli convert data.tdsx --to csv
+tableau-cli convert data.tdsx --to csv -o ./output/
 
 # Convert standalone HYPER file
-tableau-cli convert extract.hyper -o ./output/
+tableau-cli convert extract.hyper --to csv -o ./output/result.csv
 ```
 
 ### Workbooks
@@ -174,7 +175,7 @@ Error types include: `authentication-error`, `feature-disabled`, `tableau-api-er
 | Views | REST API (list, data, image) |
 | Workbooks | REST API (list, get with view enrichment) |
 | Search | Content Exploration API |
-| Convert | Local file conversion: TDSX/HYPER → Parquet (optional dependencies) |
+| Convert | Local file conversion: TDSX/HYPER → Parquet/CSV (optional dependencies) |
 
 ## Development
 

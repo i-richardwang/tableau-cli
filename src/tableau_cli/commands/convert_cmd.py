@@ -11,21 +11,27 @@ import click
 from ..errors.cli_error import CliError
 from ..output.format import output
 
+CONVERT_DEPS = ("pantab", "polars", "pyarrow")
+SUPPORTED_FORMATS = ("parquet", "csv")
+
 
 def _check_convert_deps() -> None:
     """Check that optional convert dependencies are installed."""
-    missing = []
-    for pkg in ("pantab", "polars", "pyarrow"):
-        try:
-            __import__(pkg)
-        except ImportError:
-            missing.append(pkg)
+    missing = [pkg for pkg in CONVERT_DEPS if not _is_importable(pkg)]
     if missing:
         raise CliError(
             error_type="missing-dependencies",
             message=f"Convert requires packages not installed: {', '.join(missing)}",
             hint="Run `pip install tableau-cli[convert]` to install conversion dependencies.",
         )
+
+
+def _is_importable(name: str) -> bool:
+    try:
+        __import__(name)
+        return True
+    except ImportError:
+        return False
 
 
 def _extract_hyper_from_tdsx(tdsx_path: Path, target_dir: Path) -> Path:
@@ -53,8 +59,8 @@ def _extract_hyper_from_tdsx(tdsx_path: Path, target_dir: Path) -> Path:
         return extracted
 
 
-def _read_hyper_to_parquet(hyper_path: Path, output_path: Path) -> None:
-    """Read .hyper file and write as Parquet."""
+def _read_hyper(hyper_path: Path) -> "pl.DataFrame":
+    """Read .hyper file and return as Polars DataFrame."""
     import pantab
     import polars as pl
 
@@ -70,15 +76,23 @@ def _read_hyper_to_parquet(hyper_path: Path, output_path: Path) -> None:
             message=f"Found {len(frames)} tables in {hyper_path.name}, expected 1",
             hint="Multi-table hyper files are not supported yet.",
         )
-    df = pl.from_pandas(next(iter(frames.values())))
-    df.write_parquet(output_path)
+    return pl.from_pandas(next(iter(frames.values())))
+
+
+def _write_df(df: "pl.DataFrame", output_path: Path, to: str) -> None:
+    """Write DataFrame to the specified format."""
+    if to == "parquet":
+        df.write_parquet(output_path)
+    elif to == "csv":
+        df.write_csv(output_path)
 
 
 @click.command("convert")
 @click.argument("input_path", type=click.Path(exists=True))
-@click.option("-o", "--output", "output_path", default=None, help="Output file path or directory (default: same directory as input, .parquet extension)")
-def convert_command(input_path, output_path):
-    """Convert TDSX/HYPER files to Parquet format."""
+@click.option("--to", "to_fmt", default="parquet", type=click.Choice(SUPPORTED_FORMATS), help="Output format (default: parquet)")
+@click.option("-o", "--output", "output_path", default=None, help="Output file path or directory (default: same directory as input)")
+def convert_command(input_path, to_fmt, output_path):
+    """Convert TDSX/HYPER files to Parquet or CSV format."""
     _check_convert_deps()
 
     input_p = Path(input_path)
@@ -92,19 +106,23 @@ def convert_command(input_path, output_path):
         )
 
     # Resolve output path
+    ext = f".{to_fmt}"
     if output_path is None:
-        out_p = input_p.with_suffix(".parquet")
+        out_p = input_p.with_suffix(ext)
     elif os.path.isdir(output_path):
-        out_p = Path(output_path) / f"{input_p.stem}.parquet"
+        out_p = Path(output_path) / f"{input_p.stem}{ext}"
     else:
         out_p = Path(output_path)
 
+    # Read hyper data
     if suffix == ".hyper":
-        _read_hyper_to_parquet(input_p, out_p)
+        df = _read_hyper(input_p)
     else:
         with TemporaryDirectory() as td:
             hyper_path = _extract_hyper_from_tdsx(input_p, Path(td))
-            _read_hyper_to_parquet(hyper_path, out_p)
+            df = _read_hyper(hyper_path)
+
+    _write_df(df, out_p, to_fmt)
 
     abs_path = os.path.abspath(out_p)
     sys.stderr.write(f"Converted to {abs_path}\n")
