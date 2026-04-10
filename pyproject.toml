@@ -5,13 +5,32 @@ build-backend = "hatchling.build"
 [project]
 name = "tableau-cli"
 version = "0.1.0"
-description = "CLI tool for interacting with Tableau Server/Cloud"
+description = "CLI for Tableau Server/Cloud, designed for AI agent integration"
 license = "Apache-2.0"
 requires-python = ">=3.10"
+readme = "README.md"
+authors = [
+    { name = "Richard Wang" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
     "click>=8.0",
     "httpx>=0.27",
 ]
+
+[project.urls]
+Repository = "https://github.com/i-richardwang/tableau-cli"
 
 [project.optional-dependencies]
 convert = [

@@ -17,7 +17,7 @@ MCP (Model Context Protocol) servers continuously occupy agent context. A CLI to
 ### Install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/i-richardwang/tableau-cli.git
 cd tableau-cli
 pip install -e .
 
