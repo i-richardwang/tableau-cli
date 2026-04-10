@@ -102,12 +102,14 @@ def cli():
 
 def main() -> None:
     from .commands.config_cmd import config_group
+    from .commands.convert_cmd import convert_command
     from .commands.datasources_cmd import datasources_group
     from .commands.search_cmd import search_command
     from .commands.views_cmd import views_group
     from .commands.workbooks_cmd import workbooks_group
 
     cli.add_command(config_group)
+    cli.add_command(convert_command)
     cli.add_command(datasources_group)
     cli.add_command(datasources_group, name="ds")  # alias
     cli.add_command(views_group)

@@ -20,6 +20,9 @@ MCP (Model Context Protocol) servers continuously occupy agent context. A CLI to
 git clone <repo-url>
 cd tableau-cli
 pip install -e .
+
+# Optional: install conversion dependencies (TDSX/HYPER → Parquet)
+pip install -e ".[convert]"
 ```
 
 ### Configure
@@ -65,6 +68,9 @@ tableau-cli search "Revenue" --limit 10 --order-by hitsTotal:desc
 tableau-cli datasources list
 tableau-cli ds list --filter "name:has:Sales" --limit 50
 
+# Download datasource file (.tdsx)
+tableau-cli datasources download <datasourceId> -o ./data/
+
 # Get field metadata (VizQL Data Service + Metadata API enrichment)
 tableau-cli datasources metadata <luid>
 
@@ -86,6 +92,22 @@ tableau-cli views data <viewId>
 # Download view image
 tableau-cli views image <viewId> -o dashboard.png
 tableau-cli views image <viewId> --width 1200 --height 800 --img-format SVG -o dashboard.svg
+```
+
+### Convert
+
+Convert Tableau TDSX/HYPER files to Parquet format. Requires `pip install tableau-cli[convert]`.
+
+```bash
+# Convert TDSX to Parquet (output alongside input by default)
+tableau-cli convert data.tdsx
+
+# Convert to specific directory or file
+tableau-cli convert data.tdsx -o ./output/
+tableau-cli convert data.tdsx -o ./output/custom-name.parquet
+
+# Convert standalone HYPER file
+tableau-cli convert extract.hyper -o ./output/
 ```
 
 ### Workbooks
@@ -118,6 +140,16 @@ tableau-cli ds list
 tableau-cli ds list --format table
 ```
 
+### File Output
+
+Commands that save files (`ds download`, `views image -o`, `convert`) output a JSON object with the file path to stdout, enabling agents to chain operations:
+
+```bash
+# Download and convert pipeline
+tableau-cli ds download <id> -o ./data/        # → {"filePath": ".../data.tdsx"}
+tableau-cli convert ./data/data.tdsx -o ./data/ # → {"filePath": ".../data.parquet"}
+```
+
 ### Error Output
 
 Errors are also structured JSON, designed to guide agents toward resolution:
@@ -138,10 +170,11 @@ Error types include: `authentication-error`, `feature-disabled`, `tableau-api-er
 | Area | APIs Used |
 |------|-----------|
 | Authentication | REST API v3.24 — PAT sign-in / sign-out |
-| Datasources | REST API (list) + VizQL Data Service (metadata, query) + Metadata API (GraphQL enrichment) |
+| Datasources | REST API (list, download) + VizQL Data Service (metadata, query) + Metadata API (GraphQL enrichment) |
 | Views | REST API (list, data, image) |
 | Workbooks | REST API (list, get with view enrichment) |
 | Search | Content Exploration API |
+| Convert | Local file conversion: TDSX/HYPER → Parquet (optional dependencies) |
 
 ## Development
 
