@@ -24,7 +24,7 @@ export function registerDatasourcesCommand(program: Command): void {
           getDataFn: async (pageConfig) => {
             const { pagination, datasources: data } = await api.datasources.listDatasources({
               siteId: api.siteId,
-              filter: opts.filter,
+              filter: opts.filter ?? '',
               pageSize: pageConfig.pageSize,
               pageNumber: pageConfig.pageNumber,
             });
@@ -74,6 +74,9 @@ export function registerDatasourcesCommand(program: Command): void {
       const query = JSON.parse(opts.query);
       const rowLimit = opts.limit ? parseInt(opts.limit) : undefined;
       const result = await withAuth(config, async (api) => {
+        // Note: rowLimit is NOT sent to the API (consistent with MCP default behavior
+        // for Tableau versions < 2026.1.0 where server-side row limits are unsupported).
+        // Instead, truncation is done client-side after the response.
         const queryResult = await api.vizqlDataService.queryDatasource({
           datasource: { datasourceLuid: luid },
           query,
@@ -81,11 +84,9 @@ export function registerDatasourcesCommand(program: Command): void {
             returnFormat: 'OBJECTS',
             debug: true,
             disaggregate: false,
-            rowLimit,
           },
         });
 
-        // Truncate if needed (consistent with MCP behavior)
         if (rowLimit && queryResult.data && queryResult.data.length > rowLimit) {
           queryResult.data.length = rowLimit;
         }

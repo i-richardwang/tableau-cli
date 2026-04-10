@@ -60,8 +60,18 @@ export function getGraphqlQuery(datasourceLuid: string): string {
         name
         isHidden
         description
+        descriptionInherited {
+          attribute
+          value
+        }
         fullyQualifiedName
         __typename
+        upstreamTables {
+          name
+        }
+        ... on AnalyticsField {
+          __typename
+        }
         ... on ColumnField {
           dataCategory
           role
@@ -94,6 +104,11 @@ export function getGraphqlQuery(datasourceLuid: string): string {
           dataCategory
           role
           dataType
+          hasOther
+        }
+        ... on CombinedSetField {
+          delimiter
+          combinationType
         }
       }
     }
@@ -119,6 +134,9 @@ function groupFieldsByLogicalTableId(fields: Field[]): LogicalTableGroup[] {
 
 function populateFieldWithAdditionalProperties(sourceField: Record<string, unknown>, targetField: Field): void {
   if (sourceField.description) targetField.description = sourceField.description as string;
+  if (Array.isArray(sourceField.descriptionInherited) && sourceField.descriptionInherited.length) {
+    targetField.descriptionInherited = sourceField.descriptionInherited as Field['descriptionInherited'];
+  }
   if (sourceField.dataCategory) targetField.dataCategory = sourceField.dataCategory as string;
   if (sourceField.role) targetField.role = sourceField.role as string;
   if (sourceField.defaultFormat) targetField.defaultFormat = sourceField.defaultFormat as string;

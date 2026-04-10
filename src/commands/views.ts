@@ -26,7 +26,7 @@ export function registerViewsCommand(program: Command): void {
           getDataFn: async (pageConfig) => {
             const { pagination, views: data } = await api.views.queryViewsForSite({
               siteId: api.siteId,
-              filter: opts.filter,
+              filter: opts.filter ?? '',
               pageSize: pageConfig.pageSize,
               pageNumber: pageConfig.pageNumber,
             });

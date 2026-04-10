@@ -24,7 +24,7 @@ export function registerWorkbooksCommand(program: Command): void {
           getDataFn: async (pageConfig) => {
             const { pagination, workbooks: data } = await api.workbooks.queryWorkbooksForSite({
               siteId: api.siteId,
-              filter: opts.filter,
+              filter: opts.filter ?? '',
               pageSize: pageConfig.pageSize,
               pageNumber: pageConfig.pageNumber,
             });
