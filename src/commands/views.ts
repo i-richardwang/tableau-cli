@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { withAuth } from '../auth/withAuth.js';
 import { resolveConfig } from '../config/store.js';
 import { output } from '../output/format.js';
+import { paginate } from '../utils/paginate.js';
 
 export function registerViewsCommand(program: Command): void {
   const views = program.command('views').description('Manage views');
@@ -12,25 +13,28 @@ export function registerViewsCommand(program: Command): void {
     .command('list')
     .description('List views on the site')
     .option('--filter <filter>', 'Filter string (e.g., name:has:Sales)')
-    .option('--limit <n>', 'Max results', '100')
+    .option('--page-size <n>', 'Page size for API requests')
+    .option('--limit <n>', 'Max total results')
     .option('--format <fmt>', 'Output format: json | table', 'json')
     .action(async (opts) => {
       const config = resolveConfig();
+      const pageSize = opts.pageSize ? parseInt(opts.pageSize) : undefined;
+      const limit = opts.limit ? parseInt(opts.limit) : undefined;
       const result = await withAuth(config, async (api) => {
-        return api.views.queryViewsForSite({
-          siteId: api.siteId,
-          filter: opts.filter,
-          pageSize: parseInt(opts.limit),
+        return paginate({
+          pageConfig: { pageSize, limit },
+          getDataFn: async (pageConfig) => {
+            const { pagination, views: data } = await api.views.queryViewsForSite({
+              siteId: api.siteId,
+              filter: opts.filter,
+              pageSize: pageConfig.pageSize,
+              pageNumber: pageConfig.pageNumber,
+            });
+            return { pagination, data };
+          },
         });
       });
-      const rows = result.views.map((v) => ({
-        id: v.id,
-        name: v.name,
-        createdAt: v.createdAt,
-        updatedAt: v.updatedAt,
-        viewCount: v.usage?.totalViewCount ?? 0,
-      }));
-      output(rows, opts.format);
+      output(result, opts.format);
     });
 
   views
@@ -49,7 +53,7 @@ export function registerViewsCommand(program: Command): void {
     .description('Download view image')
     .option('--width <n>', 'Image width in pixels')
     .option('--height <n>', 'Image height in pixels')
-    .option('--format <fmt>', 'Image format: PNG | SVG', 'PNG')
+    .option('--img-format <fmt>', 'Image format: PNG | SVG', 'PNG')
     .option('-o, --output <path>', 'Output file path')
     .action(async (viewId: string, opts) => {
       const config = resolveConfig();
@@ -59,7 +63,7 @@ export function registerViewsCommand(program: Command): void {
           siteId: api.siteId,
           width: opts.width ? parseInt(opts.width) : undefined,
           height: opts.height ? parseInt(opts.height) : undefined,
-          format: opts.format as 'PNG' | 'SVG',
+          format: opts.imgFormat as 'PNG' | 'SVG',
         });
       });
       if (opts.output) {
