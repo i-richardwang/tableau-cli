@@ -51,19 +51,40 @@ def datasources_list(filter_, page_size, limit, fmt):
 @click.option(
     "-o", "--output", "output_path", default=".", help="Output file path or directory (default: current directory)"
 )
-def datasources_download(datasource_id, output_path):
-    """Download a datasource file (.tdsx)."""
+@click.option(
+    "--to",
+    "to_fmt",
+    default="tdsx",
+    type=click.Choice(["tdsx", "parquet", "csv"]),
+    help="Output format (default: tdsx)",
+)
+def datasources_download(datasource_id, output_path, to_fmt):
+    """Download a datasource file, optionally converting to Parquet or CSV."""
+    from pathlib import Path
+
     config = resolve_config()
+
+    if to_fmt != "tdsx":
+        from ..utils.convert import check_convert_deps
+
+        check_convert_deps()
 
     data, filename = with_auth(
         config,
         lambda api: api.download_datasource(datasource_id=datasource_id, site_id=api.site_id),
     )
 
-    file_path = os.path.join(output_path, filename) if os.path.isdir(output_path) else output_path
+    if to_fmt == "tdsx":
+        file_path = os.path.join(output_path, filename) if os.path.isdir(output_path) else output_path
+        with open(file_path, "wb") as f:
+            f.write(data)
+    else:
+        from ..utils.convert import convert_tdsx_bytes
 
-    with open(file_path, "wb") as f:
-        f.write(data)
+        stem = Path(filename).stem
+        out_name = f"{stem}.{to_fmt}"
+        file_path = os.path.join(output_path, out_name) if os.path.isdir(output_path) else output_path
+        convert_tdsx_bytes(data, Path(file_path), to_fmt)
 
     abs_path = os.path.abspath(file_path)
     sys.stderr.write(f"Downloaded to {abs_path}\n")

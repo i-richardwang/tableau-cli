@@ -72,7 +72,7 @@ Once Claude Code has loaded the skill, a typical interaction looks like:
 3. Before constructing the actual command, the agent loads `references/cli.md` — the skill explicitly forbids guessing flags from memory, so the reference is the source of truth for syntax.
 4. The agent runs the command and parses the structured JSON output, including the `hint` field on errors.
 
-Common multi-step workflows (e.g., `ds download → convert → load with Polars/Pandas`) are pre-defined under Intent Routing in `SKILL.md`, so the agent doesn't have to reason about chaining from scratch.
+Common workflows (e.g., `ds download --to parquet → load with Polars/Pandas`) are pre-defined under Intent Routing in `SKILL.md`, so the agent doesn't have to reason about chaining from scratch.
 
 You can of course use `tableau-cli` directly from a shell without the skill — the skill is only needed when you want an agent to drive the tool.
 
@@ -97,6 +97,10 @@ tableau-cli ds list --filter "name:has:Sales" --limit 50
 
 # Download datasource file (.tdsx)
 tableau-cli datasources download <datasourceId> -o ./data/
+
+# Download and convert to Parquet or CSV in one step (requires tableau-cli[convert])
+tableau-cli ds download <datasourceId> -o ./data/ --to parquet
+tableau-cli ds download <datasourceId> -o ./data/ --to csv
 
 # Get field metadata (VizQL Data Service + Metadata API enrichment)
 tableau-cli datasources metadata <luid>
@@ -123,7 +127,9 @@ tableau-cli views image <viewId> --width 1200 --height 800 --img-format SVG -o d
 
 ### Convert
 
-Convert Tableau TDSX/HYPER files to Parquet or CSV. Requires `pip install tableau-cli[convert]`.
+Convert local TDSX/HYPER files to Parquet or CSV. Requires `pip install tableau-cli[convert]`.
+
+For most use cases, `ds download --to parquet` (or `--to csv`) is simpler — it downloads and converts in one step. The `convert` command is useful when you already have a `.tdsx` or `.hyper` file on disk.
 
 ```bash
 # Convert TDSX to Parquet (default)
@@ -173,9 +179,12 @@ tableau-cli ds list --format table
 Commands that save files (`ds download`, `views image -o`, `convert`) output a JSON object with the file path to stdout, enabling agents to chain operations:
 
 ```bash
-# Download and convert pipeline
-tableau-cli ds download <id> -o ./data/        # → {"filePath": ".../data.tdsx"}
-tableau-cli convert ./data/data.tdsx -o ./data/ # → {"filePath": ".../data.parquet"}
+# Download and convert in one step
+tableau-cli ds download <id> -o ./data/ --to parquet  # → {"filePath": ".../data.parquet"}
+
+# Or as separate steps (useful for keeping the original .tdsx)
+tableau-cli ds download <id> -o ./data/               # → {"filePath": ".../data.tdsx"}
+tableau-cli convert ./data/data.tdsx -o ./data/        # → {"filePath": ".../data.parquet"}
 ```
 
 ### Error Output

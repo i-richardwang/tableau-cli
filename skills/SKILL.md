@@ -34,7 +34,7 @@ The following requests can be handled directly with CLI commands. Load [referenc
 
 - Search content across types — `search`
 - List/filter datasources, views, or workbooks — `ds list` / `views list` / `wb list`
-- Download a datasource file — `ds download`
+- Download a datasource file — `ds download` (supports `--to parquet` / `--to csv` for direct conversion)
 - Inspect datasource field metadata — `ds metadata`
 - Query data from a datasource — `ds query`
 - Export view data as CSV — `views data`
@@ -44,7 +44,7 @@ The following requests can be handled directly with CLI commands. Load [referenc
 
 Common combined workflows:
 
-**Download datasource for local analysis**: `ds list` → `ds download` → `convert` → load with Polars/Pandas
+**Download datasource for local analysis**: `ds list` → `ds download --to parquet` → load with Polars/Pandas
 
 **Quick data extraction (no file download)**: `ds metadata` → `ds query` (requires VizQL Data Service; fall back to download + convert if unavailable)
 

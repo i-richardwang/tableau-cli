@@ -64,14 +64,19 @@ Automatically paginates until all results are fetched or limit is reached.
 
 ```bash
 tableau-cli ds download <datasource-id> -o ./output/
+tableau-cli ds download <datasource-id> -o ./output/ --to parquet
+tableau-cli ds download <datasource-id> -o ./output/ --to csv
 ```
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `datasource_id` | string (positional) | required | Datasource LUID |
 | `-o, --output` | path | `.` | Output path (directory or filename) |
+| `--to` | tdsx / parquet / csv | tdsx | Output format; parquet/csv automatically converts after download |
 
 Output: `{"filePath": "<absolute path>"}`
+
+When `--to parquet` or `--to csv` is specified, the datasource is downloaded, converted in a temporary directory, and only the final file is written to the output path. Requires `tableau-cli[convert]` extras.
 
 ### ds metadata
 
@@ -264,6 +269,8 @@ The `--filter` option uses `field:operator:value` format:
 | Search content (any type) | `search "keyword"` |
 | Find datasources | `ds list --filter "name:has:..."` |
 | Download a datasource file | `ds download <id> -o dir/` |
+| Download datasource as Parquet | `ds download <id> -o dir/ --to parquet` |
+| Download datasource as CSV | `ds download <id> -o dir/ --to csv` |
 | Inspect datasource fields | `ds metadata <luid>` |
 | Query data from a datasource | `ds query <luid> --query '{...}'` |
 | Find a dashboard/view | `views list --filter "name:has:..."` |
@@ -271,5 +278,5 @@ The `--filter` option uses `field:operator:value` format:
 | Export view screenshot | `views image <view-id> -o file.png` |
 | Find workbooks | `wb list --filter "name:has:..."` |
 | See views in a workbook | `wb get <workbook-id>` |
-| Convert TDSX to Parquet | `convert file.tdsx -o dir/` |
-| Download and convert for analysis | `ds download` → `convert` |
+| Convert local TDSX to Parquet | `convert file.tdsx -o dir/` |
+| Download and convert for analysis | `ds download <id> --to parquet` |
