@@ -9,7 +9,13 @@ description: Installation and authentication setup for tableau-cli. Load when th
 pip install "tableau-cli[convert]"
 ```
 
-Without `[convert]`, only core features are available (search, datasources, views, workbooks) — the `convert` command will not work.
+Without `[convert]`, only core features are available (search, datasources, views, workbooks) — the `convert` command and `ds download --to parquet/csv` will not work.
+
+## Upgrade
+
+```bash
+pip install --upgrade "tableau-cli[convert]"
+```
 
 ## Authentication
 

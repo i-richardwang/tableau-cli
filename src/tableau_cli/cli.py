@@ -78,7 +78,32 @@ def to_error_output(err: Exception) -> dict[str, Any]:
     }
 
 
+def _check_for_update() -> str | None:
+    """Check PyPI for a newer version. Returns a notice string, or None if up to date."""
+    try:
+        from importlib.metadata import version as installed_version
+
+        current = installed_version("tableau-cli")
+        resp = httpx.get("https://pypi.org/pypi/tableau-cli/json", timeout=3)
+        resp.raise_for_status()
+        latest = resp.json()["info"]["version"]
+        if latest != current:
+            return (
+                f"Update available: {current} → {latest}. "
+                'Run `pip install --upgrade "tableau-cli[convert]"` to update.'
+            )
+    except Exception:
+        pass
+    return None
+
+
 class TableauCli(click.Group):
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        super().format_help(ctx, formatter)
+        notice = _check_for_update()
+        if notice:
+            formatter.write(f"\n{notice}\n")
+
     def invoke(self, ctx: click.Context) -> Any:
         try:
             return super().invoke(ctx)
@@ -95,7 +120,7 @@ class TableauCli(click.Group):
 
 
 @click.group(cls=TableauCli)
-@click.version_option("0.1.1")
+@click.version_option("0.1.2")
 def cli():
     """CLI tool for interacting with Tableau Server/Cloud."""
 
