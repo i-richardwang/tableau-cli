@@ -1,0 +1,14 @@
+{
+  "name": "tableau-cli",
+  "description": "Claude Code plugin for tableau-cli — a Tableau Server / Cloud CLI designed for AI agent integration.",
+  "owner": {
+    "name": "Richard Wang"
+  },
+  "plugins": [
+    {
+      "name": "tableau-cli",
+      "source": "./",
+      "description": "Interact with Tableau Server / Cloud via tableau-cli: search content, query datasources, download files, export view images and data, convert TDSX/HYPER to Parquet/CSV."
+    }
+  ]
+}

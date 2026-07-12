@@ -6,7 +6,7 @@ A command-line interface for Tableau Server / Tableau Cloud, designed for AI age
 
 MCP (Model Context Protocol) servers continuously occupy agent context — every tool description is loaded into the system prompt, even when only one command is needed. A CLI follows a simpler call-execute-exit pattern: the agent invokes a command, reads the JSON output, and moves on.
 
-The companion Claude Code skill under `skills/` extends the same idea to command knowledge — the full reference is loaded only when the agent is about to execute a command, not kept in context upfront. See [Use with Claude Code](#use-with-claude-code) below.
+The companion agent skill under `skills/` extends the same idea to command knowledge — the full reference is loaded only when the agent is about to execute a command, not kept in context upfront. See [Use with Coding Agents](#use-with-coding-agents) below.
 
 This project provides the same capabilities as the [tableau-mcp](https://github.com/tableau/tableau-mcp) server, with behavioral alignment in data transformations, error handling, and output structures.
 
@@ -53,28 +53,29 @@ Environment variables take precedence over the config file. `siteName` defaults 
 tableau-cli config show
 ```
 
-## Use with Claude Code
+## Use with Coding Agents
 
-This repository ships with a Claude Code skill under `skills/`. Once loaded, it gives an agent enough context to route a user's request to the right command — without putting the full CLI reference into the system prompt.
+This repository ships an agent skill (`skills/tableau-cli/`) that routes a user's request to the right command and loads the full CLI reference only at execution time. The repository doubles as its own plugin marketplace for both Claude Code and Codex.
+
+**Claude Code**
 
 ```
-skills/
-├── SKILL.md              # Intent routing + environment check
-└── references/
-    ├── cli.md            # Full command reference (loaded before executing)
-    └── installation.md   # Install + auth setup (loaded if not configured)
+/plugin marketplace add i-richardwang/tableau-cli
+/plugin install tableau-cli@tableau-cli
 ```
 
-Once Claude Code has loaded the skill, a typical interaction looks like:
+To receive updates, enable auto-update for the `tableau-cli` marketplace in `/plugin`, or run `/plugin marketplace update tableau-cli` manually.
 
-1. The agent runs `tableau-cli --help` to verify the CLI is installed and configured. If not, it loads `references/installation.md` and stops until setup is complete.
-2. The agent maps the user's intent to a subcommand using the Intent Routing table in `SKILL.md` (e.g., "find datasources with Sales in the name" → `ds list --filter "name:has:Sales"`).
-3. Before constructing the actual command, the agent loads `references/cli.md` — the skill explicitly forbids guessing flags from memory, so the reference is the source of truth for syntax.
-4. The agent runs the command and parses the structured JSON output, including the `hint` field on errors.
+**Codex**
 
-Common workflows (e.g., `ds download --to parquet → load with Polars/Pandas`) are pre-defined under Intent Routing in `SKILL.md`, so the agent doesn't have to reason about chaining from scratch.
+```
+codex plugin marketplace add i-richardwang/tableau-cli
+codex plugin add tableau-cli@tableau-cli
+```
 
-You can of course use `tableau-cli` directly from a shell without the skill — the skill is only needed when you want an agent to drive the tool.
+To receive updates, run `codex plugin marketplace upgrade`.
+
+The skill is only needed when an agent drives the tool — the CLI works standalone from any shell.
 
 ## Commands
 

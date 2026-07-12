@@ -1,0 +1,17 @@
+{
+  "name": "tableau-cli",
+  "version": "0.1.4",
+  "description": "Interact with Tableau Server / Cloud via tableau-cli: search content, query datasources, download files, export view images and data, convert TDSX/HYPER to Parquet/CSV.",
+  "author": {
+    "name": "Richard Wang"
+  },
+  "homepage": "https://github.com/i-richardwang/tableau-cli",
+  "repository": "https://github.com/i-richardwang/tableau-cli",
+  "license": "Apache-2.0",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Tableau CLI",
+    "shortDescription": "Drive Tableau Server / Cloud from an agent via tableau-cli",
+    "category": "Productivity"
+  }
+}

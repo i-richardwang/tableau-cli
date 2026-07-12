@@ -1,0 +1,21 @@
+{
+  "name": "tableau-cli",
+  "interface": {
+    "displayName": "Tableau CLI"
+  },
+  "plugins": [
+    {
+      "name": "tableau-cli",
+      "description": "Interact with Tableau Server / Cloud via tableau-cli: search content, query datasources, download files, export view images and data, convert TDSX/HYPER to Parquet/CSV.",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
