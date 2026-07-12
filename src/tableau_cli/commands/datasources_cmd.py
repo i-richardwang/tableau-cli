@@ -65,9 +65,9 @@ def datasources_download(datasource_id, output_path, to_fmt):
     config = resolve_config()
 
     if to_fmt != "tdsx":
-        from ..utils.convert import check_convert_deps
+        from ..utils.convert import ensure_convert_available
 
-        check_convert_deps()
+        ensure_convert_available()
 
     data, filename = with_auth(
         config,

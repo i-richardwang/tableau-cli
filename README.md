@@ -136,7 +136,12 @@ tableau-cli views image <viewId> --vf "Region=West" -o west.png
 
 ### Convert
 
-Convert local TDSX/HYPER files to Parquet or CSV. Requires `pip install tableau-cli[convert]`.
+Convert local TDSX/HYPER files to Parquet or CSV.
+
+Conversion needs heavier packages (`pantab`, `polars`, `pyarrow`). You have two options:
+
+- Install them into the CLI: `pip install tableau-cli[convert]`.
+- Don't install anything: if [uv](https://docs.astral.sh/uv/) is on your `PATH`, conversion transparently falls back to running the step in an ephemeral `uv run --with ...` environment, so those packages never land in your host Python. The first run provisions the environment (a few seconds); later runs use uv's cache. This is the recommended path when the CLI itself was installed via `uv tool install tableau-cli`.
 
 For most use cases, `ds download --to parquet` (or `--to csv`) is simpler — it downloads and converts in one step. The `convert` command is useful when you already have a `.tdsx` or `.hyper` file on disk.
 

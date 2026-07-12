@@ -11,10 +11,8 @@ from ..errors.cli_error import CliError
 from ..output.format import output
 from ..utils.convert import (
     SUPPORTED_FORMATS,
-    check_convert_deps,
     extract_hyper_from_tdsx,
-    read_hyper,
-    write_df,
+    run_conversion,
 )
 
 
@@ -26,8 +24,6 @@ from ..utils.convert import (
 @click.option("-o", "--output", "output_path", default=None, help="Output file or directory (default: same as input)")
 def convert_command(input_path, to_fmt, output_path):
     """Convert TDSX/HYPER files to Parquet or CSV format."""
-    check_convert_deps()
-
     input_p = Path(input_path)
     suffix = input_p.suffix.lower()
 
@@ -47,15 +43,13 @@ def convert_command(input_path, to_fmt, output_path):
     else:
         out_p = Path(output_path)
 
-    # Read hyper data
+    # Convert (in-process if deps present, else via an ephemeral uv environment)
     if suffix == ".hyper":
-        df = read_hyper(input_p)
+        run_conversion(input_p, out_p, to_fmt)
     else:
         with TemporaryDirectory() as td:
             hyper_path = extract_hyper_from_tdsx(input_p, Path(td))
-            df = read_hyper(hyper_path)
-
-    write_df(df, out_p, to_fmt)
+            run_conversion(hyper_path, out_p, to_fmt)
 
     abs_path = os.path.abspath(out_p)
     sys.stderr.write(f"Converted to {abs_path}\n")
