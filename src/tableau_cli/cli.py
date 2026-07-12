@@ -87,10 +87,13 @@ def _check_for_update() -> str | None:
         resp = httpx.get("https://pypi.org/pypi/tableau-cli/json", timeout=3)
         resp.raise_for_status()
         latest = resp.json()["info"]["version"]
-        if latest != current:
+
+        def version_key(version: str) -> tuple[int, ...]:
+            return tuple(int(part) for part in version.split("."))
+
+        if version_key(latest) > version_key(current):
             return (
-                f"Update available: {current} → {latest}. "
-                'Run `pip install --upgrade "tableau-cli[convert]"` to update.'
+                f'Update available: {current} → {latest}. Run `pip install --upgrade "tableau-cli[convert]"` to update.'
             )
     except Exception:
         pass
@@ -120,7 +123,7 @@ class TableauCli(click.Group):
 
 
 @click.group(cls=TableauCli)
-@click.version_option("0.1.2")
+@click.version_option("0.1.3")
 def cli():
     """CLI tool for interacting with Tableau Server/Cloud."""
 
@@ -129,6 +132,7 @@ def main() -> None:
     from .commands.config_cmd import config_group
     from .commands.convert_cmd import convert_command
     from .commands.datasources_cmd import datasources_group
+    from .commands.projects_cmd import projects_group
     from .commands.search_cmd import search_command
     from .commands.views_cmd import views_group
     from .commands.workbooks_cmd import workbooks_group
@@ -137,6 +141,7 @@ def main() -> None:
     cli.add_command(convert_command)
     cli.add_command(datasources_group)
     cli.add_command(datasources_group, name="ds")  # alias
+    cli.add_command(projects_group)
     cli.add_command(views_group)
     cli.add_command(workbooks_group)
     cli.add_command(workbooks_group, name="wb")  # alias

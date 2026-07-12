@@ -33,13 +33,14 @@ Before running any `tableau-cli` command, load [references/cli.md](references/cl
 The following requests can be handled directly with CLI commands. Load [references/cli.md](references/cli.md) and execute:
 
 - Search content across types — `search`
-- List/filter datasources, views, or workbooks — `ds list` / `views list` / `wb list`
+- List/filter datasources, views, workbooks, or projects — `ds list` / `views list` / `wb list` / `projects list`
 - Download a datasource file — `ds download` (supports `--to parquet` / `--to csv` for direct conversion)
-- Inspect datasource field metadata — `ds metadata`
+- Inspect datasource field metadata and table relationships — `ds metadata`
 - Query data from a datasource — `ds query`
-- Export view data as CSV — `views data`
-- Export view as image — `views image`
-- View workbook details and its views — `wb get`
+- View details of a single view, incl. its web URL and upstream datasources — `views get`
+- Export view data as CSV — `views data` (supports `--vf "Field=Value"` view filters)
+- Export view as image — `views image` (supports `--vf "Field=Value"` view filters)
+- View workbook details, its views, and its web URL — `wb get`
 - Convert TDSX/HYPER to Parquet/CSV — `convert`
 
 Common combined workflows:
@@ -49,3 +50,5 @@ Common combined workflows:
 **Quick data extraction (no file download)**: `ds metadata` → `ds query` (requires VizQL Data Service; fall back to download + convert if unavailable)
 
 **Export dashboard screenshot**: `views list` → `views image`
+
+**From dashboard to data**: `search` or `views get` → `upstreamDatasources[].luid` → `ds metadata` → `ds query`

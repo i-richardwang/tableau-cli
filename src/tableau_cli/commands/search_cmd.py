@@ -5,6 +5,7 @@ import click
 from ..auth.with_auth import with_auth
 from ..config.store import resolve_config
 from ..output.format import output
+from ..utils.lineage_utils import enrich_search_results_with_lineage
 from ..utils.search_content_utils import reduce_search_content_response
 
 
@@ -33,7 +34,7 @@ def search_command(terms, type_, limit, order_by, fmt):
             order_by=order_by,
             filter_=",".join(filter_parts) if filter_parts else None,
         )
-        return reduce_search_content_response(response)
+        return enrich_search_results_with_lineage(api, reduce_search_content_response(response))
 
     result = with_auth(config, fn)
     output(result, fmt)

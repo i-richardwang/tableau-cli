@@ -5,7 +5,9 @@ import click
 from ..auth.with_auth import with_auth
 from ..config.store import resolve_config
 from ..output.format import output
+from ..utils.lineage_utils import enrich_workbooks_with_lineage
 from ..utils.paginate import paginate
+from ..utils.web_url import get_default_view_web_url
 
 
 @click.group("workbooks")
@@ -32,7 +34,8 @@ def workbooks_list(filter_, page_size, limit, fmt):
             )
             return {"pagination": result["pagination"], "data": result["workbooks"]}
 
-        return paginate(page_size=page_size, limit=limit, get_data_fn=get_data_fn)
+        workbooks = paginate(page_size=page_size, limit=limit, get_data_fn=get_data_fn)
+        return enrich_workbooks_with_lineage(api, workbooks)
 
     result = with_auth(config, fn)
     output(result, fmt)
@@ -52,6 +55,12 @@ def workbooks_get(workbook_id, fmt):
         if workbook.get("views"):
             views = api.query_views_for_workbook(workbook_id=workbook_id, site_id=api.site_id)
             workbook["views"]["view"] = views
+
+        workbook = enrich_workbooks_with_lineage(api, [workbook])[0]
+
+        url = get_default_view_web_url(workbook, config.server, config.site_name)
+        if url:
+            workbook["url"] = url
 
         return workbook
 

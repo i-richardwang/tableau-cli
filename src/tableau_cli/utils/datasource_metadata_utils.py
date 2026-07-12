@@ -137,11 +137,25 @@ def _build_parameters(extra_data: dict[str, Any] | None) -> list[dict[str, Any]]
     return parameters
 
 
+def _datasource_model_entry(datasource_model_result: dict[str, Any] | None) -> dict[str, Any]:
+    """Optional datasourceModel entry, placed after datasourceDescription to match the MCP response shape."""
+    if datasource_model_result is None:
+        return {}
+    return {
+        "datasourceModel": {
+            "logicalTables": datasource_model_result.get("logicalTables", []),
+            "logicalTableRelationships": datasource_model_result.get("logicalTableRelationships", []),
+        }
+    }
+
+
 def simplify_read_metadata_result(
     read_metadata_result: dict[str, Any],
+    datasource_model_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "datasourceDescription": "",
+        **_datasource_model_entry(datasource_model_result),
         "fieldGroups": [],
         "parameters": [],
     }
@@ -172,12 +186,14 @@ def simplify_read_metadata_result(
 def combine_fields(
     read_metadata_result: dict[str, Any],
     list_fields_result: dict[str, Any],
+    datasource_model_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     ds_list = list_fields_result.get("data", {}).get("publishedDatasources", [])
     ds = ds_list[0] if ds_list else None
 
     combined: dict[str, Any] = {
         "datasourceDescription": (ds.get("description") or "") if ds else "",
+        **_datasource_model_entry(datasource_model_result),
         "fieldGroups": [],
         "parameters": [],
     }

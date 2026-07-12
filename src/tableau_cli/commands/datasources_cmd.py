@@ -104,17 +104,25 @@ def datasources_metadata(luid, fmt):
             get_graphql_query,
             simplify_read_metadata_result,
         )
+        from ..utils.tableau_version import is_tableau_version_at_least
 
         read_metadata_result = api.read_metadata(datasource_luid=luid)
+
+        # The datasource model (logical tables and their relationships) comes from
+        # a dedicated VizQL Data Service endpoint that requires Tableau >= 2025.3.
+        datasource_model_result = None
+        product_version = api.get_server_info().get("productVersion", {}).get("value", "")
+        if is_tableau_version_at_least(product_version, "2025.3.0"):
+            datasource_model_result = api.get_datasource_model(datasource_luid=luid)
 
         # Try to enrich with Metadata API (GraphQL)
         try:
             graphql_result = api.graphql(get_graphql_query(luid))
         except Exception:
             # Metadata API may not be available
-            return simplify_read_metadata_result(read_metadata_result)
+            return simplify_read_metadata_result(read_metadata_result, datasource_model_result)
 
-        return combine_fields(read_metadata_result, graphql_result)
+        return combine_fields(read_metadata_result, graphql_result, datasource_model_result)
 
     result = with_auth(config, fn)
     output(result, fmt)

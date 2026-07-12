@@ -89,6 +89,14 @@ class RestApi:
             self._client.post(url, headers=self._auth_headers())
         self._creds = None
 
+    # ── Server (REST API) ───────────────────────────────────────────
+
+    def get_server_info(self) -> dict[str, Any]:
+        url = f"{self._base_url}/serverinfo"
+        resp = self._client.get(url, headers=self._auth_headers())
+        resp.raise_for_status()
+        return resp.json()["serverInfo"]
+
     # ── Datasources (REST API) ──────────────────────────────────────
 
     def list_datasources(
@@ -167,9 +175,17 @@ class RestApi:
             "views": [_shape_view(v) for v in raw_list],
         }
 
-    def query_view_data(self, *, view_id: str, site_id: str) -> str:
+    def get_view(self, *, view_id: str, site_id: str) -> dict[str, Any]:
+        url = f"{self._base_url}/sites/{site_id}/views/{view_id}"
+        params = {"includeUsageStatistics": "true"}
+        resp = self._client.get(url, params=params, headers=self._auth_headers())
+        resp.raise_for_status()
+        return _shape_view(resp.json()["view"])
+
+    def query_view_data(self, *, view_id: str, site_id: str, view_filters: dict[str, str] | None = None) -> str:
         url = f"{self._base_url}/sites/{site_id}/views/{view_id}/data"
-        resp = self._client.get(url, headers=self._auth_headers())
+        params = _view_filter_params(view_filters)
+        resp = self._client.get(url, params=params, headers=self._auth_headers())
         resp.raise_for_status()
         return resp.text
 
@@ -181,6 +197,7 @@ class RestApi:
         width: int | None = None,
         height: int | None = None,
         format_: str = "PNG",
+        view_filters: dict[str, str] | None = None,
     ) -> bytes:
         url = f"{self._base_url}/sites/{site_id}/views/{view_id}/image"
         params: dict[str, Any] = {"resolution": "high"}
@@ -190,6 +207,7 @@ class RestApi:
             params["vizHeight"] = height
         if format_:
             params["format"] = format_
+        params.update(_view_filter_params(view_filters))
         resp = self._client.get(url, params=params, headers=self._auth_headers())
         if resp.status_code >= 400:
             error_data: dict[str, Any] = {}
@@ -264,6 +282,33 @@ class RestApi:
             "workbooks": [_shape_workbook(w) for w in raw_list],
         }
 
+    # ── Projects (REST API) ─────────────────────────────────────────
+
+    def query_projects(
+        self,
+        *,
+        site_id: str,
+        filter_: str = "",
+        page_size: int | None = None,
+        page_number: int | None = None,
+    ) -> dict[str, Any]:
+        url = f"{self._base_url}/sites/{site_id}/projects"
+        params: dict[str, Any] = {}
+        if filter_:
+            params["filter"] = filter_
+        if page_size is not None:
+            params["pageSize"] = page_size
+        if page_number is not None:
+            params["pageNumber"] = page_number
+        resp = self._client.get(url, params=params, headers=self._auth_headers())
+        resp.raise_for_status()
+        data = resp.json()
+        raw_list = data.get("projects", {}).get("project") or []
+        return {
+            "pagination": _parse_pagination(data["pagination"]),
+            "projects": [_shape_project_detail(p) for p in raw_list],
+        }
+
     # ── Content Exploration (Search) ────────────────────────────────
 
     def search_content(
@@ -295,6 +340,18 @@ class RestApi:
 
     def read_metadata(self, *, datasource_luid: str) -> dict[str, Any]:
         url = f"{self._host}/api/v1/vizql-data-service/read-metadata"
+        body = {"datasource": {"datasourceLuid": datasource_luid}}
+        try:
+            resp = self._client.post(url, json=body, headers=self._auth_headers())
+        except httpx.TransportError as exc:
+            raise FeatureDisabledError(VDS_DISABLED_MESSAGE) from exc
+        if resp.status_code == 404:
+            raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_datasource_model(self, *, datasource_luid: str) -> dict[str, Any]:
+        url = f"{self._host}/api/v1/vizql-data-service/get-datasource-model"
         body = {"datasource": {"datasourceLuid": datasource_luid}}
         try:
             resp = self._client.post(url, json=body, headers=self._auth_headers())
@@ -350,6 +407,13 @@ def _parse_pagination(p: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _view_filter_params(view_filters: dict[str, str] | None) -> dict[str, str]:
+    """Map view filter field names to `vf_`-prefixed query parameters."""
+    if not view_filters:
+        return {}
+    return {(key if key.startswith("vf_") else f"vf_{key}"): value for key, value in view_filters.items()}
+
+
 # ── Response shaping (equivalent to Zod schemas in TS version) ──────────
 
 
@@ -357,6 +421,31 @@ def _shape_project(raw: Any) -> dict[str, str]:
     if not isinstance(raw, dict):
         return {"name": "", "id": ""}
     return {"name": raw.get("name", ""), "id": raw.get("id", "")}
+
+
+def _shape_project_detail(raw: dict[str, Any]) -> dict[str, Any]:
+    """Match TS projectSchema: {id, name, description?, parentProjectId?, contentPermissions?, ...}"""
+    result: dict[str, Any] = {
+        "id": raw.get("id", ""),
+        "name": raw.get("name", ""),
+    }
+    for key in (
+        "description",
+        "parentProjectId",
+        "contentPermissions",
+        "controllingPermissionsProjectId",
+        "createdAt",
+        "updatedAt",
+    ):
+        if key in raw:
+            result[key] = raw[key]
+    # z.coerce.boolean() — convert string "true"/"false" to bool
+    if "topLevelProject" in raw:
+        top_level = raw["topLevelProject"]
+        result["topLevelProject"] = top_level.lower() == "true" if isinstance(top_level, str) else bool(top_level)
+    if isinstance(raw.get("owner"), dict) and raw["owner"].get("id"):
+        result["owner"] = {"id": raw["owner"]["id"]}
+    return result
 
 
 def _shape_tags(raw: Any) -> dict[str, Any]:
@@ -382,10 +471,11 @@ def _shape_datasource(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _shape_view(raw: dict[str, Any]) -> dict[str, Any]:
-    """Match TS viewSchema: {id, name, createdAt, updatedAt, workbook?, owner?, project?, tags, usage?}"""
+    """Match TS viewSchema: {id, name, contentUrl, createdAt, updatedAt, workbook?, owner?, project?, tags, usage?}"""
     result: dict[str, Any] = {
         "id": raw.get("id", ""),
         "name": raw.get("name", ""),
+        "contentUrl": raw.get("contentUrl", ""),
         "createdAt": raw.get("createdAt", ""),
         "updatedAt": raw.get("updatedAt", ""),
     }

@@ -102,7 +102,9 @@ tableau-cli datasources download <datasourceId> -o ./data/
 tableau-cli ds download <datasourceId> -o ./data/ --to parquet
 tableau-cli ds download <datasourceId> -o ./data/ --to csv
 
-# Get field metadata (VizQL Data Service + Metadata API enrichment)
+# Get field metadata (VizQL Data Service + Metadata API enrichment).
+# On Tableau >= 2025.3 the result also includes the datasource model:
+# logical tables and their relationships.
 tableau-cli datasources metadata <luid>
 
 # Query datasource data (VizQL Data Service)
@@ -113,16 +115,23 @@ tableau-cli ds query <luid> --query '{"fields": [...]}' --limit 100
 ### Views
 
 ```bash
-# List views
+# List views (includes upstream datasources via Metadata API enrichment)
 tableau-cli views list
 tableau-cli views list --filter "name:has:Dashboard" --format table
+
+# Get view details: upstream datasources, workbook/project/owner info, and web URL
+tableau-cli views get <viewId>
 
 # Get view data as CSV
 tableau-cli views data <viewId>
 
+# Get view data with view filters applied
+tableau-cli views data <viewId> --vf "Region=West" --vf "Category=Technology"
+
 # Download view image
 tableau-cli views image <viewId> -o dashboard.png
 tableau-cli views image <viewId> --width 1200 --height 800 --img-format SVG -o dashboard.svg
+tableau-cli views image <viewId> --vf "Region=West" -o west.png
 ```
 
 ### Convert
@@ -147,12 +156,21 @@ tableau-cli convert extract.hyper --to csv -o ./output/result.csv
 ### Workbooks
 
 ```bash
-# List workbooks
+# List workbooks (includes upstream datasources via Metadata API enrichment)
 tableau-cli workbooks list
 tableau-cli wb list --filter "name:eq:Finance" --format table
 
-# Get workbook details (includes views with usage statistics)
+# Get workbook details (includes views with usage statistics,
+# upstream datasources, and the default view's web URL)
 tableau-cli workbooks get <workbookId>
+```
+
+### Projects
+
+```bash
+# List projects
+tableau-cli projects list
+tableau-cli projects list --filter "topLevelProject:eq:true" --format table
 ```
 
 ### Config
@@ -207,10 +225,11 @@ Error types include: `authentication-error`, `feature-disabled`, `tableau-api-er
 | Area | APIs Used |
 |------|-----------|
 | Authentication | REST API v3.24 — PAT sign-in / sign-out |
-| Datasources | REST API (list, download) + VizQL Data Service (metadata, query) + Metadata API (GraphQL enrichment) |
-| Views | REST API (list, data, image) |
-| Workbooks | REST API (list, get with view enrichment) |
-| Search | Content Exploration API |
+| Datasources | REST API (list, download) + VizQL Data Service (metadata, model, query) + Metadata API (GraphQL enrichment) |
+| Views | REST API (list, get, data, image with view filters) + Metadata API (lineage enrichment) |
+| Workbooks | REST API (list, get with view enrichment) + Metadata API (lineage enrichment) |
+| Projects | REST API (list) |
+| Search | Content Exploration API + Metadata API (lineage enrichment) |
 | Convert | Local file conversion: TDSX/HYPER → Parquet/CSV (optional dependencies) |
 
 ## Development

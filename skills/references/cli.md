@@ -40,6 +40,8 @@ tableau-cli search --format table
 
 View results include `parentWorkbookName` (parent workbook) and `totalViewCount` (total views).
 
+Workbook and view results include `upstreamDatasources[]` (`{luid, name}`) — the published datasources they are built on. Use this to jump from a dashboard to `ds metadata` / `ds query` without a separate lookup.
+
 ---
 
 ## datasources (alias: ds)
@@ -94,10 +96,11 @@ tableau-cli ds metadata <luid> --format table
 
 Returns:
 - `datasourceDescription` — datasource description
+- `datasourceModel` — logical tables and their relationships (join fields and operators); only present on Tableau >= 2025.3
 - `fieldGroups[].fields[]` — field list (name, dataType, role, formula, description, etc.)
 - `parameters[]` — parameter list (name, parameterType, dataType, value, etc.)
 
-Attempts to enrich via GraphQL Metadata API; falls back to base VizQL metadata if unavailable.
+Attempts to enrich via GraphQL Metadata API; falls back to base VizQL metadata if unavailable. Use `datasourceModel` to understand multi-table datasources before constructing `ds query` requests.
 
 ### ds query
 
@@ -137,7 +140,22 @@ tableau-cli views list --filter "name:has:keyword" --format table
 | `--limit` | int | none | Max total results |
 | `--format` | json / table | json | Output format |
 
-Results include `workbookId` to trace back to the parent workbook.
+Results include the parent `workbook` (with name), `project`, `owner`, `upstreamDatasources[]` (published datasources the view is built on), and `totalViewCount`.
+
+### views get
+
+View details for a single view, including its web URL.
+
+```bash
+tableau-cli views get <view-id>
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `view_id` | string (positional) | required | View LUID |
+| `--format` | json / table | json | Output format |
+
+Returns the view with `upstreamDatasources[]`, parent `workbook` / `project` / `owner` info, usage statistics, and `url` — the web URL to open the view in a browser.
 
 ### views data
 
@@ -145,11 +163,13 @@ Export view data as CSV.
 
 ```bash
 tableau-cli views data <view-id>
+tableau-cli views data <view-id> --vf "Region=West" --vf "Category=Technology"
 ```
 
 | Option | Type | Description |
 |--------|------|-------------|
 | `view_id` | string (positional) | View LUID |
+| `--vf` | `Field=Value` (repeatable) | View filter: filter the view by field values before export |
 
 Output: CSV text written directly to stdout (not JSON).
 
@@ -161,6 +181,7 @@ Export view as image.
 tableau-cli views image <view-id> -o output.png
 tableau-cli views image <view-id> --width 1200 --height 800 -o output.png
 tableau-cli views image <view-id> --img-format SVG -o output.svg
+tableau-cli views image <view-id> --vf "Region=West" -o west.png
 ```
 
 | Option | Type | Default | Description |
@@ -169,6 +190,7 @@ tableau-cli views image <view-id> --img-format SVG -o output.svg
 | `--width` | int | none | Image width in pixels |
 | `--height` | int | none | Image height in pixels |
 | `--img-format` | PNG / SVG | PNG | Image format |
+| `--vf` | `Field=Value` (repeatable) | none | View filter: filter the view by field values before rendering |
 | `-o, --output` | path | none | Output file path |
 
 With `-o`: outputs `{"filePath": "<absolute path>"}`. Without `-o`: base64-encoded image to stdout.
@@ -191,6 +213,8 @@ tableau-cli wb list --filter "name:has:keyword" --format table
 | `--limit` | int | none | Max total results |
 | `--format` | json / table | json | Output format |
 
+Results include `upstreamDatasources[]` (`{luid, name}`) — the published datasources each workbook is built on.
+
 ### wb get
 
 View workbook details, including all views with usage statistics.
@@ -204,6 +228,29 @@ tableau-cli wb get <workbook-id> --format table
 |--------|------|---------|-------------|
 | `workbook_id` | string (positional) | required | Workbook LUID |
 | `--format` | json / table | json | Output format |
+
+Returns the workbook with `upstreamDatasources[]` and `url` — the web URL to open the workbook's default view in a browser.
+
+---
+
+## projects
+
+### projects list
+
+```bash
+tableau-cli projects list
+tableau-cli projects list --filter "topLevelProject:eq:true" --format table
+tableau-cli projects list --filter "parentProjectId:eq:<project-id>"
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--filter` | string | none | Server-side filter (fields: name, parentProjectId, topLevelProject, ownerName, createdAt, updatedAt) |
+| `--page-size` | int | none | Items per page |
+| `--limit` | int | none | Max total results |
+| `--format` | json / table | json | Output format |
+
+Results include name, description, parent project, content permissions, owner, and timestamps.
 
 ---
 
@@ -274,9 +321,14 @@ The `--filter` option uses `field:operator:value` format:
 | Inspect datasource fields | `ds metadata <luid>` |
 | Query data from a datasource | `ds query <luid> --query '{...}'` |
 | Find a dashboard/view | `views list --filter "name:has:..."` |
+| See view details / get view link | `views get <view-id>` |
+| Find the datasource behind a dashboard | `views get <view-id>` → `upstreamDatasources` |
 | Export view data | `views data <view-id>` |
+| Export filtered view data | `views data <view-id> --vf "Field=Value"` |
 | Export view screenshot | `views image <view-id> -o file.png` |
+| Export filtered view screenshot | `views image <view-id> --vf "Field=Value" -o file.png` |
 | Find workbooks | `wb list --filter "name:has:..."` |
-| See views in a workbook | `wb get <workbook-id>` |
+| See views in a workbook / get workbook link | `wb get <workbook-id>` |
+| Browse projects / site structure | `projects list` |
 | Convert local TDSX to Parquet | `convert file.tdsx -o dir/` |
 | Download and convert for analysis | `ds download <id> --to parquet` |
