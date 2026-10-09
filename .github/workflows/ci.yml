@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  conversion:
+    name: Hyper exports (${{ matrix.os }}, Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15-intel, windows-latest, ubuntu-latest]
+        python: ['3.11', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install ${{ matrix.python }}
+      - run: uv venv --python ${{ matrix.python }}
+      - run: uv pip install -e ".[convert,dev]" "tableauhyperapi==0.0.26479"
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync pytest
+      - run: uv build

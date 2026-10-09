@@ -7,7 +7,7 @@ name = "tableau-cli"
 version = "0.1.4"
 description = "CLI for Tableau Server/Cloud, designed for AI agent integration"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 authors = [
     { name = "Richard Wang" },
@@ -18,10 +18,10 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
@@ -34,12 +34,13 @@ Repository = "https://github.com/i-richardwang/tableau-cli"
 
 [project.optional-dependencies]
 convert = [
-    "pantab>=4.0",
-    "polars>=1.0",
-    "pyarrow>=15.0",
+    "tableauhyperapi>=0.0.26479",
 ]
 dev = [
     "ruff>=0.11",
+    "pytest>=8.0",
+    "pyarrow>=15.0",
+    "tzdata",
 ]
 
 [project.scripts]
@@ -49,7 +50,7 @@ tableau-cli = "tableau_cli.cli:main"
 packages = ["src/tableau_cli"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]

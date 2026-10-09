@@ -14,7 +14,7 @@ This project provides the same capabilities as the [tableau-mcp](https://github.
 
 ### Prerequisites
 
-- Python >= 3.10
+- Python >= 3.11
 - A Tableau Server or Tableau Cloud instance
 - A [Personal Access Token (PAT)](https://help.tableau.com/current/server/en-us/security_personal_access_tokens.htm)
 
@@ -99,7 +99,7 @@ tableau-cli ds list --filter "name:has:Sales" --limit 50
 # Download datasource file (.tdsx)
 tableau-cli datasources download <datasourceId> -o ./data/
 
-# Download and convert to Parquet or CSV in one step (requires tableau-cli[convert])
+# Download and convert to Parquet or CSV in one step (requires tableau-cli[convert] or uv)
 tableau-cli ds download <datasourceId> -o ./data/ --to parquet
 tableau-cli ds download <datasourceId> -o ./data/ --to csv
 
@@ -139,10 +139,14 @@ tableau-cli views image <viewId> --vf "Region=West" -o west.png
 
 Convert local TDSX/HYPER files to Parquet or CSV.
 
-Conversion needs heavier packages (`pantab`, `polars`, `pyarrow`). You have two options:
+Conversion runs locally through the official `tableauhyperapi` package. Its native Hyper engine exports directly to Parquet or CSV, without loading the entire extract into a DataFrame. You have two options:
 
-- Install them into the CLI: `pip install tableau-cli[convert]`.
-- Don't install anything: if [uv](https://docs.astral.sh/uv/) is on your `PATH`, conversion transparently falls back to running the step in an ephemeral `uv run --with ...` environment, so those packages never land in your host Python. The first run provisions the environment (a few seconds); later runs use uv's cache. This is the recommended path when the CLI itself was installed via `uv tool install tableau-cli`.
+- Install the export dependency into the CLI: `pip install tableau-cli[convert]`.
+- Don't install anything: if [uv](https://docs.astral.sh/uv/) is on your `PATH`, conversion transparently falls back to running the step in an ephemeral `uv run --with ...` environment, so the conversion dependency never lands in your host Python. The first run provisions the environment (a few seconds); later runs use uv's cache. This is the recommended path when the CLI itself was installed via `uv tool install tableau-cli`.
+
+The conversion runtime requires native 64-bit Python 3.11 or newer. Supported targets are Apple Silicon Macs (macOS 13+), Intel Macs, Windows x86_64, and the Linux x86_64 distributions supported by [Hyper API](https://tableau.github.io/hyper-db/docs/installation/). Package installation selects the engine for the interpreter's platform; Apple Silicon uses the native ARM package.
+
+Each extract must contain exactly one table. Exports preserve column order and use Hyper's native [Parquet and CSV mappings](https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/dc-sql-reference/copy-to.html). CSV includes a header and uses ISO dates. The destination is replaced only after a complete export. Download-and-convert commands check that the local engine can start before downloading the datasource.
 
 For most use cases, `ds download --to parquet` (or `--to csv`) is simpler — it downloads and converts in one step. The `convert` command is useful when you already have a `.tdsx` or `.hyper` file on disk.
 
@@ -244,8 +248,12 @@ Error types include: `authentication-error`, `feature-disabled`, `tableau-api-er
 # Run directly
 python -m tableau_cli.cli views list
 
-# Install in editable mode
-pip install -e .
+# Install development and conversion dependencies
+pip install -e ".[convert,dev]"
+
+# Validate local exports and isolated uv execution
+ruff check .
+pytest
 ```
 
 ## Acknowledgements
