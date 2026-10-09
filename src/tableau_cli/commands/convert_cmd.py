@@ -43,6 +43,12 @@ def convert_command(input_path, to_fmt, output_path):
     else:
         out_p = Path(output_path)
 
+    if input_p.resolve() == out_p.resolve():
+        raise CliError(
+            error_type="invalid-input",
+            message="The output path must differ from the input file.",
+        )
+
     # Convert (in-process if deps present, else via an ephemeral uv environment)
     if suffix == ".hyper":
         run_conversion(input_p, out_p, to_fmt)

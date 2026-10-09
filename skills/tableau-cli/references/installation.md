@@ -9,7 +9,9 @@ description: Installation and authentication setup for tableau-cli. Load when th
 pip install "tableau-cli[convert]"
 ```
 
-Without `[convert]`, only core features are available (search, datasources, views, workbooks) — the `convert` command and `ds download --to parquet/csv` will not work.
+Requires Python 3.11 or newer. The `[convert]` extra installs the official `tableauhyperapi` package for local Parquet/CSV exports. Use native 64-bit Python on Apple Silicon or Intel macOS, Windows x86_64, or a supported Linux x86_64 distribution.
+
+Alternatively, install the core CLI and keep `uv` on `PATH`. Conversion then runs in an isolated environment provisioned automatically by `uv`; the first run installs the export dependency and later runs reuse the cache. Core commands do not need conversion dependencies.
 
 ## Upgrade
 

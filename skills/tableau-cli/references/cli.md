@@ -78,7 +78,7 @@ tableau-cli ds download <datasource-id> -o ./output/ --to csv
 
 Output: `{"filePath": "<absolute path>"}`
 
-When `--to parquet` or `--to csv` is specified, the datasource is downloaded, converted in a temporary directory, and only the final file is written to the output path. Requires `tableau-cli[convert]` extras.
+When `--to parquet` or `--to csv` is specified, the datasource is downloaded, converted in a temporary directory, and only the final file is written to the output path. Runs locally through Hyper API; requires `tableau-cli[convert]` or `uv` on `PATH`.
 
 ### ds metadata
 
@@ -256,7 +256,7 @@ Results include name, description, parent project, content permissions, owner, a
 
 ## convert
 
-Local file conversion: TDSX/HYPER → Parquet/CSV. Requires `tableau-cli[convert]`.
+Local file conversion: TDSX/HYPER → Parquet/CSV. Uses the official local Hyper engine; requires `tableau-cli[convert]` or `uv` on `PATH`.
 
 ```bash
 tableau-cli convert data.tdsx
@@ -273,7 +273,9 @@ tableau-cli convert extract.hyper -o ./output/result.parquet
 
 Output: `{"filePath": "<absolute path>"}`
 
-Reports `missing-dependencies` error if convert extras are not installed, with hint to run `pip install "tableau-cli[convert]"`.
+Requires exactly one table per extract. CSV includes a header and uses ISO dates; Parquet uses Hyper's native type mappings. The output is replaced only after a successful export.
+
+Reports `missing-dependencies` when neither Hyper API nor `uv` is available. Engine startup and export failures are reported as `convert-error`.
 
 ---
 
