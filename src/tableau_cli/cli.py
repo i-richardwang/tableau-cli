@@ -123,7 +123,7 @@ class TableauCli(click.Group):
 
 
 @click.group(cls=TableauCli)
-@click.version_option("0.1.4")
+@click.version_option(package_name="tableau-cli")
 def cli():
     """CLI tool for interacting with Tableau Server/Cloud."""
 
