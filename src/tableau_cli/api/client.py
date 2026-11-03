@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import contextlib
+import re
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
-from ..errors.cli_error import CliError, FeatureDisabledError
+from ..errors.cli_error import CliError, FeatureDisabledError, WorkbookDatasourceNotEnabledError
 from ..errors.vds_error_handler import handle_vds_error
 
-API_VERSION = "3.24"
+# REST API version used for the unauthenticated serverinfo call. Every later request uses the
+# version the server reports there (restApiVersion), so version-gated features key off the server.
+MIN_API_VERSION = "3.24"
 TIMEOUT_S = 120
 
 VDS_DISABLED_MESSAGE = (
@@ -18,6 +21,18 @@ VDS_DISABLED_MESSAGE = (
     "https://help.tableau.com/current/server-linux/en-us/cli_configuration-set_tsm.htm"
     "#featuresvizqldataservicedeploywithtsm."
 )
+
+# Appended to the VDS-disabled message by query_datasource on REST API < 3.30: there a 404 can also
+# mean the target is an embedded (workbook) datasource, which those versions do not support.
+EMBEDDED_DATASOURCE_VERSION_HINT = (
+    "This can also occur when querying an embedded (workbook) datasource on Tableau Server REST API "
+    "versions below 3.30, which do not support embedded datasource queries. Published datasources are unaffected."
+)
+
+# Site-scoped opt-in flag required to query embedded (workbook) datasources. The server enforces it as
+# HTTP 403 / errorCode 403800 on every VDS endpoint; 403800 alone is a generic denial, so the flag name
+# in the message is what identifies this gate (equivalent to isWorkbookDatasourceNotEnabled in TS).
+WORKBOOK_DS_NOT_ENABLED_FLAG = "VDSForWorkbookDatasources"
 
 
 @dataclass
@@ -31,14 +46,25 @@ class RestApi:
     def __init__(self, host: str) -> None:
         self._host = host.rstrip("/")
         self._creds: Credentials | None = None
+        self._version = MIN_API_VERSION
+        self._server_info: dict[str, Any] | None = None
         self._client = httpx.Client(
             timeout=TIMEOUT_S,
             headers={"Accept": "application/json", "Content-Type": "application/json"},
         )
 
     @property
+    def version(self) -> str:
+        """REST API version in use: the one reported by the server once sign_in() has run."""
+        return self._version
+
+    def version_is_at_least(self, version: str) -> bool:
+        """Compare the REST API version in use against a "major.minor" string (e.g. "3.30")."""
+        return _major_minor(self._version) >= _major_minor(version)
+
+    @property
     def _base_url(self) -> str:
-        return f"{self._host}/api/{API_VERSION}"
+        return f"{self._host}/api/{self._version}"
 
     @property
     def _base_url_no_version(self) -> str:
@@ -64,6 +90,7 @@ class RestApi:
     # ── Authentication ──────────────────────────────────────────────
 
     def sign_in(self, *, site_name: str, pat_name: str, pat_value: str) -> None:
+        self._load_server_info()
         url = f"{self._base_url}/auth/signin"
         body = {
             "credentials": {
@@ -91,11 +118,26 @@ class RestApi:
 
     # ── Server (REST API) ───────────────────────────────────────────
 
+    def _load_server_info(self) -> None:
+        """GET /serverinfo (needs no authentication) and adopt the REST API version it reports."""
+        url = f"{self._host}/api/{MIN_API_VERSION}/serverinfo"
+        try:
+            resp = self._client.get(url)
+            resp.raise_for_status()
+            info = resp.json()["serverInfo"]
+            version = info["restApiVersion"]
+            if not re.fullmatch(r"\d+\.\d+", version):
+                raise ValueError(f"unexpected restApiVersion {version!r}")
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            raise CliError(error_type="tableau-api-error", message=f"Failed to get server info: {exc}") from exc
+        self._server_info = info
+        self._version = version
+
     def get_server_info(self) -> dict[str, Any]:
-        url = f"{self._base_url}/serverinfo"
-        resp = self._client.get(url, headers=self._auth_headers())
-        resp.raise_for_status()
-        return resp.json()["serverInfo"]
+        """Server info ({productVersion: {value, build}, restApiVersion, ...}) fetched during sign-in."""
+        if self._server_info is None:
+            raise RuntimeError("Not authenticated. Call sign_in() first.")
+        return self._server_info
 
     # ── Datasources (REST API) ──────────────────────────────────────
 
@@ -123,6 +165,26 @@ class RestApi:
             "pagination": _parse_pagination(data["pagination"]),
             "datasources": [_shape_datasource(d) for d in raw_list],
         }
+
+    def resolve_datasource_type(self, *, datasource_id: str, site_id: str) -> str | None:
+        """Classify a LUID as "published" or "embedded" (workbook) via the Query Data Source endpoint.
+
+        Servers with workbook-datasource querying enabled return embedded datasources here too
+        (parentType "Workbook", no project); published ones carry a project. Older servers answer
+        404 for embedded LUIDs, so a 404 for a LUID that VizQL Data Service already resolved also
+        means embedded. Any other failure returns None: classification is best-effort and must never
+        break the caller's response.
+        """
+        url = f"{self._base_url}/sites/{site_id}/datasources/{datasource_id}"
+        try:
+            resp = self._client.get(url, headers=self._auth_headers())
+            if resp.status_code == 404:
+                return "embedded"
+            resp.raise_for_status()
+            datasource = _shape_datasource(resp.json()["datasource"])
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return None
+        return "embedded" if _is_embedded_datasource(datasource) else "published"
 
     def download_datasource(self, *, datasource_id: str, site_id: str) -> tuple[bytes, str]:
         """Download datasource content. Returns (data, filename)."""
@@ -289,6 +351,7 @@ class RestApi:
         *,
         site_id: str,
         filter_: str = "",
+        capability: str | None = None,
         page_size: int | None = None,
         page_number: int | None = None,
     ) -> dict[str, Any]:
@@ -296,6 +359,8 @@ class RestApi:
         params: dict[str, Any] = {}
         if filter_:
             params["filter"] = filter_
+        if capability:
+            params["capability"] = capability
         if page_size is not None:
             params["pageSize"] = page_size
         if page_number is not None:
@@ -338,54 +403,53 @@ class RestApi:
 
     # ── VizQL Data Service ──────────────────────────────────────────
 
-    def read_metadata(self, *, datasource_luid: str) -> dict[str, Any]:
-        url = f"{self._host}/api/v1/vizql-data-service/read-metadata"
-        body = {"datasource": {"datasourceLuid": datasource_luid}}
+    def _vds_post(
+        self, endpoint: str, body: dict[str, Any], *, not_found_message: str = VDS_DISABLED_MESSAGE
+    ) -> dict[str, Any]:
+        """POST to a VizQL Data Service endpoint and return the JSON body, translating failures.
+
+        The workbook-datasource gate is detected by message (not status) and is checked before the
+        404 branch so it is never mislabeled as "VizQL Data Service disabled". Any 404 means the
+        service is disabled; `not_found_message` lets an endpoint add context to that error.
+        """
+        url = f"{self._host}/api/v1/vizql-data-service/{endpoint}"
         try:
             resp = self._client.post(url, json=body, headers=self._auth_headers())
         except httpx.TransportError as exc:
             raise FeatureDisabledError(VDS_DISABLED_MESSAGE) from exc
+        if resp.status_code < 400:
+            return resp.json()
+        error = _safe_json(resp) or {}
+        if _is_workbook_datasource_not_enabled(error):
+            raise WorkbookDatasourceNotEnabledError()
         if resp.status_code == 404:
-            raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
-        resp.raise_for_status()
-        return resp.json()
+            raise FeatureDisabledError(not_found_message)
+        raise handle_vds_error(
+            error.get("message", "Unknown Tableau error"),
+            resp.status_code,
+            error.get("errorCode") or error.get("tab-error-code"),
+        )
+
+    def read_metadata(self, *, datasource_luid: str) -> dict[str, Any]:
+        return self._vds_post("read-metadata", {"datasource": {"datasourceLuid": datasource_luid}})
 
     def get_datasource_model(self, *, datasource_luid: str) -> dict[str, Any]:
-        url = f"{self._host}/api/v1/vizql-data-service/get-datasource-model"
-        body = {"datasource": {"datasourceLuid": datasource_luid}}
-        try:
-            resp = self._client.post(url, json=body, headers=self._auth_headers())
-        except httpx.TransportError as exc:
-            raise FeatureDisabledError(VDS_DISABLED_MESSAGE) from exc
-        if resp.status_code == 404:
-            raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
-        resp.raise_for_status()
-        return resp.json()
+        return self._vds_post("get-datasource-model", {"datasource": {"datasourceLuid": datasource_luid}})
 
     def query_datasource(self, *, datasource_luid: str, query: dict, options: dict | None = None) -> dict[str, Any]:
-        url = f"{self._host}/api/v1/vizql-data-service/query-datasource"
         body: dict[str, Any] = {
             "datasource": {"datasourceLuid": datasource_luid},
             "query": query,
         }
         if options:
             body["options"] = options
-        try:
-            resp = self._client.post(url, json=body, headers=self._auth_headers())
-        except httpx.TransportError as exc:
-            raise FeatureDisabledError(VDS_DISABLED_MESSAGE) from exc
-        if resp.status_code == 404:
-            raise FeatureDisabledError(VDS_DISABLED_MESSAGE)
-        if resp.status_code >= 400:
-            try:
-                data = resp.json()
-            except Exception:
-                resp.raise_for_status()
-                return {}  # unreachable
-            error_message = data.get("message", "Unknown Tableau error")
-            error_code = data.get("errorCode") or data.get("tab-error-code")
-            raise handle_vds_error(error_message, resp.status_code, error_code)
-        return resp.json()
+        # Below REST API 3.30 a 404 here can also mean an embedded datasource rather than a disabled service.
+        not_found_message = (
+            VDS_DISABLED_MESSAGE
+            if self.version_is_at_least("3.30")
+            else f"{VDS_DISABLED_MESSAGE} {EMBEDDED_DATASOURCE_VERSION_HINT}"
+        )
+        return self._vds_post("query-datasource", body, not_found_message=not_found_message)
 
     # ── Metadata API (GraphQL) ──────────────────────────────────────
 
@@ -405,6 +469,31 @@ def _parse_pagination(p: dict[str, Any]) -> dict[str, int]:
         "pageSize": int(p["pageSize"]),
         "totalAvailable": int(p["totalAvailable"]),
     }
+
+
+def _major_minor(version: str) -> tuple[int, int]:
+    major, minor = version.split(".")
+    return int(major), int(minor)
+
+
+def _safe_json(resp: httpx.Response) -> dict[str, Any] | None:
+    try:
+        data = resp.json()
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _is_workbook_datasource_not_enabled(error_body: dict[str, Any]) -> bool:
+    message = error_body.get("message")
+    return isinstance(message, str) and WORKBOOK_DS_NOT_ENABLED_FLAG.lower() in message.lower()
+
+
+def _tableau_boolean(value: Any) -> bool:
+    """Tableau REST may deliver booleans as the strings "true"/"false"; never treat "false" as true."""
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return value is True
 
 
 def _view_filter_params(view_filters: dict[str, str] | None) -> dict[str, str]:
@@ -439,10 +528,8 @@ def _shape_project_detail(raw: dict[str, Any]) -> dict[str, Any]:
     ):
         if key in raw:
             result[key] = raw[key]
-    # z.coerce.boolean() — convert string "true"/"false" to bool
     if "topLevelProject" in raw:
-        top_level = raw["topLevelProject"]
-        result["topLevelProject"] = top_level.lower() == "true" if isinstance(top_level, str) else bool(top_level)
+        result["topLevelProject"] = _tableau_boolean(raw["topLevelProject"])
     if isinstance(raw.get("owner"), dict) and raw["owner"].get("id"):
         result["owner"] = {"id": raw["owner"]["id"]}
     return result
@@ -458,16 +545,33 @@ def _shape_tags(raw: Any) -> dict[str, Any]:
 
 
 def _shape_datasource(raw: dict[str, Any]) -> dict[str, Any]:
-    """Match TS dataSourceSchema: {id, name, description?, project, tags}"""
+    """Match TS dataSourceSchema:
+    {id, name, contentUrl?, description?, createdAt?, isCertified?, project?, parentType?, owner?, tags}
+
+    `project` is optional: embedded (workbook) datasources carry `parentType: "Workbook"` and no project.
+    """
     result: dict[str, Any] = {
         "id": raw.get("id", ""),
         "name": raw.get("name", ""),
     }
-    if "description" in raw:
-        result["description"] = raw["description"]
-    result["project"] = _shape_project(raw.get("project"))
+    for key in ("contentUrl", "description", "createdAt"):
+        if key in raw:
+            result[key] = raw[key]
+    if "isCertified" in raw:
+        result["isCertified"] = _tableau_boolean(raw["isCertified"])
+    if isinstance(raw.get("project"), dict):
+        result["project"] = _shape_project(raw["project"])
+    if "parentType" in raw:
+        result["parentType"] = raw["parentType"]
+    if isinstance(raw.get("owner"), dict) and raw["owner"].get("id"):
+        result["owner"] = {"id": raw["owner"]["id"]}
     result["tags"] = _shape_tags(raw.get("tags"))
     return result
+
+
+def _is_embedded_datasource(datasource: dict[str, Any]) -> bool:
+    """Some servers return a `project` on embedded datasources too, so `parentType` is checked first."""
+    return datasource.get("parentType") == "Workbook" or not datasource.get("project")
 
 
 def _shape_view(raw: dict[str, Any]) -> dict[str, Any]:
@@ -504,12 +608,7 @@ def _shape_workbook(raw: dict[str, Any]) -> dict[str, Any]:
     result["contentUrl"] = raw.get("contentUrl", "")
     if "project" in raw:
         result["project"] = _shape_project(raw.get("project"))
-    # z.coerce.boolean() — convert string "true"/"false" to bool
-    show_tabs = raw.get("showTabs", False)
-    if isinstance(show_tabs, str):
-        result["showTabs"] = show_tabs.lower() == "true"
-    else:
-        result["showTabs"] = bool(show_tabs)
+    result["showTabs"] = _tableau_boolean(raw.get("showTabs"))
     if "defaultViewId" in raw:
         result["defaultViewId"] = raw["defaultViewId"]
     result["tags"] = _shape_tags(raw.get("tags"))

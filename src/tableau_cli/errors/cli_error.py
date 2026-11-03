@@ -42,3 +42,23 @@ class AuthenticationError(CliError):
             message=message,
             hint=("Check your PAT credentials with `tableau-cli config show`. Ensure the token has not expired."),
         )
+
+
+class WorkbookDatasourceNotEnabledError(CliError):
+    """Raised when a VizQL Data Service call targets an embedded (workbook) datasource on a site
+    where workbook-datasource querying is not enabled. This is the expected response on
+    non-enabled sites (opt-in per site), not a rare edge case."""
+
+    def __init__(self):
+        super().__init__(
+            error_type="workbook-datasource-not-enabled",
+            message=(
+                "This data source is embedded in a workbook, and querying workbook (embedded) data sources "
+                "is not enabled on this Tableau site. This capability is opt-in per site: a site administrator "
+                "must enable it before this data source can be queried."
+            ),
+            hint=(
+                "Ask a site administrator to enable querying of workbook (embedded) data sources, "
+                "or query the published datasource it is built on instead."
+            ),
+        )

@@ -9,7 +9,14 @@ import click
 from ..auth.with_auth import with_auth
 from ..config.store import resolve_config
 from ..output.format import output
+from ..utils.datasource_metadata_utils import (
+    combine_fields,
+    first_published_datasource,
+    get_graphql_query,
+    simplify_read_metadata_result,
+)
 from ..utils.paginate import paginate
+from ..utils.tableau_version import is_tableau_version_at_least
 
 
 @click.group("datasources")
@@ -99,30 +106,29 @@ def datasources_metadata(luid, fmt):
     config = resolve_config()
 
     def fn(api):
-        from ..utils.datasource_metadata_utils import (
-            combine_fields,
-            get_graphql_query,
-            simplify_read_metadata_result,
-        )
-        from ..utils.tableau_version import is_tableau_version_at_least
-
         read_metadata_result = api.read_metadata(datasource_luid=luid)
 
         # The datasource model (logical tables and their relationships) comes from
         # a dedicated VizQL Data Service endpoint that requires Tableau >= 2025.3.
         datasource_model_result = None
-        product_version = api.get_server_info().get("productVersion", {}).get("value", "")
-        if is_tableau_version_at_least(product_version, "2025.3.0"):
+        if is_tableau_version_at_least(api.get_server_info()["productVersion"], "2025.3.0"):
             datasource_model_result = api.get_datasource_model(datasource_luid=luid)
 
-        # Try to enrich with Metadata API (GraphQL)
+        # Enrich with the Metadata API (GraphQL) when it is available.
         try:
             graphql_result = api.graphql(get_graphql_query(luid))
         except Exception:
-            # Metadata API may not be available
-            return simplify_read_metadata_result(read_metadata_result, datasource_model_result)
+            graphql_result = None
 
-        return combine_fields(read_metadata_result, graphql_result, datasource_model_result)
+        # A publishedDatasources match from the Metadata API is authoritative; otherwise classify via REST.
+        if graphql_result is not None and first_published_datasource(graphql_result) is not None:
+            datasource_type = "published"
+        else:
+            datasource_type = api.resolve_datasource_type(datasource_id=luid, site_id=api.site_id)
+
+        if graphql_result is None:
+            return simplify_read_metadata_result(read_metadata_result, datasource_model_result, datasource_type)
+        return combine_fields(read_metadata_result, graphql_result, datasource_model_result, datasource_type)
 
     result = with_auth(config, fn)
     output(result, fmt)

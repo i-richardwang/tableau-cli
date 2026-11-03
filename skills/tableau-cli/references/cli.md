@@ -40,7 +40,7 @@ tableau-cli search --format table
 
 View results include `parentWorkbookName` (parent workbook) and `totalViewCount` (total views).
 
-Workbook and view results include `upstreamDatasources[]` (`{luid, name}`) — the published datasources they are built on. Use this to jump from a dashboard to `ds metadata` / `ds query` without a separate lookup.
+Workbook and view results include `upstreamDatasources[]` (`{luid, name}`) — the published datasources they are built on, including those reached through embedded datasources; dashboards are covered as well as worksheets. Use this to jump from a dashboard to `ds metadata` / `ds query` without a separate lookup.
 
 ---
 
@@ -61,6 +61,8 @@ tableau-cli ds list --filter "name:has:keyword" --limit 50 --format table
 | `--format` | json / table | json | Output format |
 
 Automatically paginates until all results are fetched or limit is reached.
+
+Each result has `id`, `name`, `contentUrl`, `description`, `createdAt`, `isCertified`, `project` (absent for embedded workbook datasources, which carry `parentType: "Workbook"` instead), `owner.id`, and `tags`.
 
 ### ds download
 
@@ -96,11 +98,14 @@ tableau-cli ds metadata <luid> --format table
 
 Returns:
 - `datasourceDescription` — datasource description
+- `datasourceType` — `published` or `embedded` (a datasource embedded in a workbook); omitted if it cannot be determined
 - `datasourceModel` — logical tables and their relationships (join fields and operators); only present on Tableau >= 2025.3
 - `fieldGroups[].fields[]` — field list (name, dataType, role, formula, description, etc.)
 - `parameters[]` — parameter list (name, parameterType, dataType, value, etc.)
 
 Attempts to enrich via GraphQL Metadata API; falls back to base VizQL metadata if unavailable. Use `datasourceModel` to understand multi-table datasources before constructing `ds query` requests.
+
+Embedded (workbook) datasources can only be read on sites where an administrator has enabled querying of workbook datasources; otherwise the command reports `workbook-datasource-not-enabled`.
 
 ### ds query
 
@@ -119,6 +124,8 @@ tableau-cli ds query <luid> --query '{"fields": [...]}' --limit 100 --format tab
 | `--format` | json / table | json | Output format |
 
 `--query` must be valid JSON; otherwise reports `invalid-input` error. `--limit` truncates client-side, not server-side.
+
+Querying an embedded (workbook) datasource on a site where that is not enabled reports `workbook-datasource-not-enabled`; use the published datasource it is built on instead (see `upstreamDatasources` from `views get` / `wb get`).
 
 ---
 
@@ -241,11 +248,13 @@ Returns the workbook with `upstreamDatasources[]` and `url` — the web URL to o
 tableau-cli projects list
 tableau-cli projects list --filter "topLevelProject:eq:true" --format table
 tableau-cli projects list --filter "parentProjectId:eq:<project-id>"
+tableau-cli projects list --capability Write
 ```
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--filter` | string | none | Server-side filter (fields: name, parentProjectId, topLevelProject, ownerName, createdAt, updatedAt) |
+| `--capability` | `Write` | none | Only projects the current user can publish or create content into. Requires REST API >= 3.30 (reports `validation-error` otherwise); combines with `--filter` |
 | `--page-size` | int | none | Items per page |
 | `--limit` | int | none | Max total results |
 | `--format` | json / table | json | Output format |
@@ -332,5 +341,6 @@ The `--filter` option uses `field:operator:value` format:
 | Find workbooks | `wb list --filter "name:has:..."` |
 | See views in a workbook / get workbook link | `wb get <workbook-id>` |
 | Browse projects / site structure | `projects list` |
+| Find projects the user can publish into | `projects list --capability Write` |
 | Convert local TDSX to Parquet | `convert file.tdsx -o dir/` |
 | Download and convert for analysis | `ds download <id> --to parquet` |

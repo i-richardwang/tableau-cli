@@ -19,6 +19,14 @@ def _to_graphql_string_array(values: list[str]) -> str:
     return f"[{', '.join(json.dumps(v) for v in values)}]"
 
 
+# Published datasources connected via an embedded datasource are only reliably reachable by
+# traversing embeddedDatasources -> upstreamDatasources. The Workbook.upstreamDatasources rollup is a
+# Catalog-computed field that can be empty even when the embedded -> published lineage edge is
+# indexed, so both are queried and unioned (see _collect_published_lineage).
+#
+# This traversal is workbook-scoped ONLY. A sheet/view must report just the datasources it uses, and
+# Workbook.embeddedDatasources is workbook-wide, so unioning it into view lineage would over-attribute
+# every published datasource in the workbook to every sheet.
 def _workbooks_connection_query(workbook_luids: list[str]) -> str:
     return f"""workbooksConnection(filter: {{ luidWithin: {_to_graphql_string_array(workbook_luids)} }}) {{
         nodes {{
@@ -27,12 +35,23 @@ def _workbooks_connection_query(workbook_luids: list[str]) -> str:
             luid
             name
           }}
+          embeddedDatasources {{
+            upstreamDatasources {{
+              luid
+              name
+            }}
+          }}
         }}
       }}"""
 
 
-def _sheets_connection_query(view_luids: list[str]) -> str:
-    return f"""sheetsConnection(filter: {{ luidWithin: {_to_graphql_string_array(view_luids)} }}) {{
+# REST "views" include worksheets and dashboards; the Metadata API models them separately, so both
+# sheetsConnection and dashboardsConnection are queried with the same selection.
+_VIEW_CONNECTIONS = ("sheetsConnection", "dashboardsConnection")
+
+
+def _view_connection_query(connection_name: str, view_luids: list[str]) -> str:
+    return f"""{connection_name}(filter: {{ luidWithin: {_to_graphql_string_array(view_luids)} }}) {{
         nodes {{
           luid
           upstreamDatasources {{
@@ -63,10 +82,14 @@ def get_workbook_lineage_query(workbook_luids: list[str]) -> str:
     }}"""
 
 
+def _all_view_connections_query(view_luids: list[str]) -> str:
+    return "\n      ".join(_view_connection_query(name, view_luids) for name in _VIEW_CONNECTIONS)
+
+
 def get_view_lineage_query(view_luids: list[str]) -> str:
     return f"""
     query viewLineage {{
-      {_sheets_connection_query(view_luids)}
+      {_all_view_connections_query(view_luids)}
     }}"""
 
 
@@ -74,31 +97,56 @@ def get_search_content_lineage_query(workbook_luids: list[str], view_luids: list
     return f"""
     query searchContentLineage {{
       {_workbooks_connection_query(workbook_luids) if workbook_luids else ""}
-      {_sheets_connection_query(view_luids) if view_luids else ""}
+      {_all_view_connections_query(view_luids) if view_luids else ""}
     }}"""
 
 
-def _normalize_lineage_contents(contents: Any) -> list[dict[str, str]]:
-    if not isinstance(contents, list):
-        return []
-    return [
-        {"luid": c["luid"], "name": c.get("name") or c["luid"]}
-        for c in contents
-        if isinstance(c, dict) and c.get("luid")
-    ]
+def _collect_published_lineage(
+    upstream_datasources: Any,
+    embedded_datasources: Any = None,
+) -> list[dict[str, str]]:
+    """Union the content-level upstream datasources with those reached via embedded datasources.
+
+    Entries without a luid are dropped (embedded datasources carry no luid) and the result is
+    deduped by luid preserving first-seen order. When the same luid appears more than once
+    (e.g. the content rollup reports a null name but the embedded traversal names it), the first
+    non-null name wins so a luid fallback never masks a real name. This is what recovers
+    published datasources that the content-level upstreamDatasources rollup omits.
+    """
+    combined: list[Any] = list(upstream_datasources) if isinstance(upstream_datasources, list) else []
+    if isinstance(embedded_datasources, list):
+        for embedded in embedded_datasources:
+            if isinstance(embedded, dict) and isinstance(embedded.get("upstreamDatasources"), list):
+                combined.extend(embedded["upstreamDatasources"])
+
+    by_luid: dict[str, str | None] = {}
+    for content in combined:
+        if not isinstance(content, dict) or not content.get("luid"):
+            continue
+        luid = content["luid"]
+        name = content.get("name")
+        if luid not in by_luid or (by_luid[luid] is None and name is not None):
+            by_luid[luid] = name
+
+    return [{"luid": luid, "name": name or luid} for luid, name in by_luid.items()]
 
 
 def get_workbook_lineage_by_luid(response: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
-    nodes = response.get("data", {}).get("workbooksConnection", {}).get("nodes") or []
+    nodes = (response.get("data") or {}).get("workbooksConnection", {}).get("nodes") or []
     return {
-        node["luid"]: _normalize_lineage_contents(node.get("upstreamDatasources"))
+        node["luid"]: _collect_published_lineage(node.get("upstreamDatasources"), node.get("embeddedDatasources"))
         for node in nodes
         if isinstance(node, dict) and node.get("luid")
     }
 
 
 def get_view_lineage_by_luid(response: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    nodes = response.get("data", {}).get("sheetsConnection", {}).get("nodes") or []
+    data = response.get("data") or {}
+    nodes: list[Any] = []
+    for connection_name in _VIEW_CONNECTIONS:
+        connection = data.get(connection_name)
+        if isinstance(connection, dict) and isinstance(connection.get("nodes"), list):
+            nodes.extend(connection["nodes"])
     lineage_by_luid: dict[str, dict[str, Any]] = {}
     for node in nodes:
         if not isinstance(node, dict) or not node.get("luid"):
@@ -106,7 +154,9 @@ def get_view_lineage_by_luid(response: dict[str, Any]) -> dict[str, dict[str, An
         workbook = node.get("workbook") if isinstance(node.get("workbook"), dict) else None
         owner = workbook.get("owner") if workbook and isinstance(workbook.get("owner"), dict) else None
         lineage_by_luid[node["luid"]] = {
-            "upstreamDatasources": _normalize_lineage_contents(node.get("upstreamDatasources")),
+            # View lineage stays sheet-scoped: only the sheet's own upstream (published) datasources,
+            # never the parent workbook's full embeddedDatasources set.
+            "upstreamDatasources": _collect_published_lineage(node.get("upstreamDatasources")),
             "workbook": (
                 {"luid": workbook["luid"], "name": workbook["name"]} if workbook and workbook.get("name") else None
             ),

@@ -105,7 +105,8 @@ tableau-cli ds download <datasourceId> -o ./data/ --to csv
 
 # Get field metadata (VizQL Data Service + Metadata API enrichment).
 # On Tableau >= 2025.3 the result also includes the datasource model:
-# logical tables and their relationships.
+# logical tables and their relationships. `datasourceType` tells whether the
+# LUID is a published datasource or one embedded in a workbook.
 tableau-cli datasources metadata <luid>
 
 # Query datasource data (VizQL Data Service)
@@ -181,6 +182,9 @@ tableau-cli workbooks get <workbookId>
 # List projects
 tableau-cli projects list
 tableau-cli projects list --filter "topLevelProject:eq:true" --format table
+
+# Only projects you can publish into (requires REST API >= 3.30)
+tableau-cli projects list --capability Write
 ```
 
 ### Config
@@ -228,17 +232,17 @@ Errors are also structured JSON, designed to guide agents toward resolution:
 }
 ```
 
-Error types include: `authentication-error`, `feature-disabled`, `tableau-api-error`, `config-error`, `validation-error`, and translated [VDS error codes](https://help.tableau.com/current/api/vizql-data-service/en-us/docs/vds_error_codes.html) with actionable hints.
+Error types include: `authentication-error`, `feature-disabled`, `workbook-datasource-not-enabled` (embedded datasource querying is an opt-in site setting), `tableau-api-error`, `config-error`, `validation-error`, and translated [VDS error codes](https://help.tableau.com/current/api/vizql-data-service/en-us/docs/vds_error_codes.html) with actionable hints.
 
 ## API Coverage
 
 | Area | APIs Used |
 |------|-----------|
-| Authentication | REST API v3.24 — PAT sign-in / sign-out |
-| Datasources | REST API (list, download) + VizQL Data Service (metadata, model, query) + Metadata API (GraphQL enrichment) |
+| Authentication | REST API — PAT sign-in / sign-out, using the API version the server reports in `serverinfo` |
+| Datasources | REST API (list, get, download) + VizQL Data Service (metadata, model, query) + Metadata API (GraphQL enrichment) |
 | Views | REST API (list, get, data, image with view filters) + Metadata API (lineage enrichment) |
 | Workbooks | REST API (list, get with view enrichment) + Metadata API (lineage enrichment) |
-| Projects | REST API (list) |
+| Projects | REST API (list, optional `capability` filter) |
 | Search | Content Exploration API + Metadata API (lineage enrichment) |
 | Convert | Local file conversion: TDSX/HYPER → Parquet/CSV (optional dependencies) |
 
