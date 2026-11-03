@@ -1,7 +1,7 @@
 {
   "name": "tableau-cli",
   "description": "Interact with Tableau Server / Cloud via tableau-cli: search content, query datasources, download files, export view images and data, convert TDSX/HYPER to Parquet/CSV.",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "author": {
     "name": "Richard Wang"
   },
